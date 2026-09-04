@@ -18,4 +18,11 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [GameScene]
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+// 调试钩子：仅在 dev 下把游戏实例挂到 window.__GAME__，
+// 供 debug/overlay.js（独立脚本 / Chrome 扩展）读取并叠加调试层。
+// 生产构建（import.meta.env.DEV 为 false）不会执行，零污染。
+if (import.meta.env.DEV) {
+  (window as any).__GAME__ = game;
+}

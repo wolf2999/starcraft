@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="bar">
+      <button id="refresh">刷新</button>
+      <button id="toggleVis" disabled>显示/隐藏选中</button>
+      <button id="bringFwdBtn" disabled>上移一层</button>
+      <button id="sendBackBtn" disabled>下移一层</button>
+      <input id="depthInput" type="number" value="0" title="层级值，大者渲染在上" />
+      <button id="setDepthBtn" disabled>设层级</button>
+      <label class="sort"><input id="sortDepth" type="checkbox" />按层级排序</label>
+      <label class="sort"><input id="groupType" type="checkbox" />按类型分组</label>
+      <span class="hint">点节点=高亮+多选切换；选中后可批量隐藏/调层级</span>
+    </div>
+    <div id="status" class="status"></div>
+    <div id="scenes" class="list"></div>
+    <div id="objects" class="list"></div>
+    <script src="panel.js"></script>
+  </body>
+</html>

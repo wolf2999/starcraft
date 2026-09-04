@@ -17,7 +17,10 @@ export class Entity {
   sprite: Phaser.GameObjects.Image;
   hpBar: Phaser.GameObjects.Graphics;
   selectionRing: Phaser.GameObjects.Graphics;
-  larvaeContainer?: Phaser.GameObjects.Container;
+  // 每个 Entity 自己的容器：entityLayer → [Container(单位) → sprite/hpBar/ring]。
+  // 容器的 depth = 1000 + x + y（+ 高度修正）负责单位之间的等距排序；
+  // 容器内子对象固定在 (0,0)、scale=1，用世界屏幕坐标直接定位，渲染结果不变。
+  container: Phaser.GameObjects.Container;
 
   hp: number;
   maxHp: number;
@@ -60,7 +63,17 @@ export class Entity {
   mineTimer = 0;
   animateTimer = 0;
 
-  constructor(scene: Phaser.Scene, def: Def, x: number, y: number, owner: Owner) {
+  constructor(
+    scene: Phaser.Scene,
+    def: Def,
+    x: number,
+    y: number,
+    owner: Owner,
+    // 可选：单位层的父容器（entityLayer）。Entity 会创建“自己的 Container”加进去，
+    // 让 DevTools inspector 能看到 entityLayer → Container(单位) → sprite/hpBar/ring 的真实树；
+    // 容器固定在 (0,0)、scale=1，子对象用世界屏幕坐标直接定位，渲染结果不变。
+    parent?: Phaser.GameObjects.Container
+  ) {
     this.id = _id++;
     this.def = def;
     this.scene = scene;
@@ -79,12 +92,27 @@ export class Entity {
     // “No texture found matching key: scv/marine/b_cc/...” 控制台刷屏
     // （参考之前 stepMove 异常的次根因：纹理缺失触发 sprite 渲染异常）。
     this.sprite = scene.add.image(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
-    if (!def.isBuilding) this.sprite.setDepth(1000 + x + y);
-
     this.selectionRing = scene.add.graphics();
     this.hpBar = scene.add.graphics();
-    this.hpBar.setDepth(2000);
-    this.selectionRing.setDepth(1999);
+
+    // 每个单位一个 Container：把 sprite/selectionRing/hpBar 收进去。
+    // 容器本身在 (0,0)、scale=1，所以子对象仍按世界屏幕坐标定位，渲染与之前一致。
+    this.container = scene.add.container(0, 0);
+    this.container.add(this.sprite);
+    this.container.add(this.selectionRing);
+    this.container.add(this.hpBar);
+    // 容器内子对象排序：sprite 在最底，selectionRing 次之，hpBar 最上
+    // （setDepth 会触发容器的 sortChildrenFlag，渲染时按此顺序绘制）。
+    this.sprite.setDepth(0);
+    this.selectionRing.setDepth(1);
+    this.hpBar.setDepth(2);
+
+    // 把“单位容器”加入传入的单位层（entityLayer），形成 entityLayer → [Container(单位)] 的树。
+    if (parent) parent.add(this.container);
+
+    // 初始 depth：非建筑按等距排序公式（1000 + x + y）；
+    // 建筑在 spawnFromDef 里另设 200+x+y（低于单位，避免被单位盖住）。
+    if (!def.isBuilding) this.container.setDepth(1000 + x + y);
 
     // 寻路缓存与冷却，构造时必须初始化为安全默认值：
     // stepMove 里 this.path.length 的访问依赖此字段为数组，
@@ -342,8 +370,10 @@ export class Entity {
     const h = heightAt(this.x, this.y);
     const { sx, sy } = worldToScreen(this.x, this.y, h);
     this.sprite.setPosition(sx, sy);
+    // 非建筑：每帧把“单位容器”的 depth 设成等距排序值（越大越靠前/靠上）。
+    // 注意此处改的是 container 的 depth，不再是 sprite 的——sprite 的 depth 只在容器内排序用。
     if (!this.def.isBuilding)
-      this.sprite.setDepth(1000 + this.x + this.y + h * 100);
+      this.container.setDepth(1000 + this.x + this.y + h * 100);
     this.drawHpBar();
     this.drawSelectionRing();
   }

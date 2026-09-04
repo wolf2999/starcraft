@@ -35,6 +35,13 @@ export class GameScene extends Phaser.Scene {
   attackMoveMode = false;
   attackMoveCursor!: Phaser.GameObjects.Graphics;
 
+  // 分层容器：地图层(底) / 单位层(中) / UI 层(顶)。
+  // 容器本身固定在 (0,0)、scale=1，子对象用世界坐标直接定位，渲染结果与加入根显示列表一致，
+  // 但 DevTools inspector 能按这三层看到真实场景树（而非平铺 1279 个 Image）。
+  mapLayer!: Phaser.GameObjects.Container;
+  entityLayer!: Phaser.GameObjects.Container;
+  uiLayer!: Phaser.GameObjects.Container;
+
   supplyProvided = 0;
   supplyUsed = 0;
   minerals = 50;
@@ -65,12 +72,22 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     try {
+    // 分层容器：地图层(底) / 单位层(中) / UI 层(顶)。必须在其它对象创建前建立。
+    this.mapLayer = this.add.container(0, 0).setDepth(-1000);
+    this.entityLayer = this.add.container(0, 0).setDepth(0);
+    this.uiLayer = this.add.container(0, 0).setDepth(1000);
+
+    // 选择框 / 攻击移动光标 → UI 层（永远最上）
     this.selRect = this.add.graphics().setDepth(6000);
+    this.uiLayer.add(this.selRect);
     this.attackMoveCursor = this.add.graphics().setDepth(6000);
+    this.uiLayer.add(this.attackMoveCursor);
 
     this.cameras.main.setBackgroundColor("#10221a");
+    // 菌毯 → 地图层（位于地形瓦片之上）
     this.creepLayer = this.add.graphics();
     this.creepLayer.setDepth(5);
+    this.mapLayer.add(this.creepLayer);
 
     generateAll(this);
 
@@ -78,7 +95,7 @@ export class GameScene extends Phaser.Scene {
     const map = getLostTemple();
     // 用 Phaser Tilemap + Tiled 渲染地形（maps/lost-temple.tmj），
     // 并由瓦片 gid 反推地形网格供寻路/出生点使用
-    buildTerrainTilemap(this);
+    buildTerrainTilemap(this, this.mapLayer);
 
     // 资源节点
     map.resources.forEach((r) => this.spawnResource(r.kind, r.gx, r.gy));
@@ -139,7 +156,7 @@ export class GameScene extends Phaser.Scene {
     this.hudEl = document.getElementById("hud");
     this.updateHud();
     } catch (e: any) {
-      this.add
+      const errText = this.add
         .text(12, 80, "ERROR: " + (e?.message || String(e)), {
           fontFamily: "monospace",
           fontSize: "12px",
@@ -147,15 +164,18 @@ export class GameScene extends Phaser.Scene {
           backgroundColor: "#000000cc",
         })
         .setDepth(10000);
+      // 错误提示也归 UI 层（若有 uiLayer 已建立）
+      if (this.uiLayer) this.uiLayer.add(errText);
       console.error(e);
     }
   }
 
   spawnResource(id: string, gx: number, gy: number) {
     const def = RESOURCE_DEFS[id];
-    const e = new Entity(this, def, gx, gy, "neutral");
+    const e = new Entity(this, def, gx, gy, "neutral", this.entityLayer);
     e.hideHpBar = true;
-    e.sprite.setDepth(1000 + gx + gy);
+    // 资源容器也按等距排序（与 constructor 里的非建筑公式一致）
+    e.container.setDepth(1000 + gx + gy);
     this.entities.push(e);
   }
 
@@ -168,11 +188,12 @@ export class GameScene extends Phaser.Scene {
   ): Entity {
     const def = ALL_DEFS[defId];
     if (!def) return null as any;
-    const e = new Entity(this, def, x, y, owner);
+    const e = new Entity(this, def, x, y, owner, this.entityLayer);
     e.constructed = constructed;
 
     if (def.isBuilding) {
-      e.sprite.setDepth(200 + x + y);
+      // 建筑容器 depth 用 200+x+y，低于单位层（1000+…），保证单位绘制在建筑物之上。
+      e.container.setDepth(200 + x + y);
     }
 
     if (def.isNeutral) {
@@ -222,7 +243,8 @@ export class GameScene extends Phaser.Scene {
       [building.x + 0.6, building.y + 0.6],
       [building.x, building.y + 1.0],
     ];
-    building.larvaeContainer = this.add.container(0, 0);
+    // 每个幼虫都是独立 Entity，自带 Container 并加入 entityLayer；
+    // 不再单独包一个空 larvaeContainer（之前那个容器没有任何子节点，纯属多余）。
     spots.forEach(([lx, ly]) => {
       const l = this.spawnFromDef(lx, ly, "larva", building.owner);
       if (l) (building as any)._larvae = ((building as any)._larvae || []).concat(l);
@@ -448,9 +470,9 @@ export class GameScene extends Phaser.Scene {
     this.entities = this.entities.filter((e) => {
       if (e.alive) return true;
       this.spawnDeathFx(e);
-      e.sprite.destroy();
-      e.hpBar.destroy();
-      e.selectionRing.destroy();
+      // 销毁“单位容器”即连带销毁其下的 sprite/hpBar/selectionRing，
+      // 并把容器从 entityLayer 移除，避免死亡实体在场景树里留空节点。
+      e.container.destroy();
       if (e.gatherTarget) e.gatherTarget = null;
       return false;
     });
@@ -546,6 +568,7 @@ export class GameScene extends Phaser.Scene {
     const { sx: sx1, sy: sy1 } = worldToScreen(from.x, from.y);
     const { sx: sx2, sy: sy2 } = worldToScreen(to.x, to.y);
     const line = this.add.graphics().setDepth(3000);
+    this.uiLayer.add(line);
     line.lineStyle(2, color, 0.9);
     line.beginPath();
     line.moveTo(sx1, sy1 - from.sprite.displayHeight * 0.4);
@@ -560,6 +583,7 @@ export class GameScene extends Phaser.Scene {
     // 命中爆点
     const g = this.add.image(sx2, sy2 - to.sprite.displayHeight * 0.4, "glow_white").setDepth(3001);
     g.setTint(color);
+    this.uiLayer.add(g);
     this.tweens.add({
       targets: g,
       alpha: 0,
@@ -572,6 +596,7 @@ export class GameScene extends Phaser.Scene {
   spawnDeathFx(e: Entity) {
     const { sx, sy } = worldToScreen(e.x, e.y);
     const g = this.add.image(sx, sy - e.sprite.displayHeight * 0.3, "glow_red").setDepth(3000);
+    this.uiLayer.add(g);
     this.tweens.add({
       targets: g,
       alpha: 0,
@@ -583,6 +608,7 @@ export class GameScene extends Phaser.Scene {
     if (e.def.isBuilding) {
       for (let i = 0; i < 6; i++) {
         const p = this.add.image(sx, sy, "shot_red").setDepth(3001);
+        this.uiLayer.add(p);
         const ang = Math.random() * Math.PI * 2;
         this.tweens.add({
           targets: p,

@@ -151,8 +151,13 @@ export function ensureTerrainTileset(scene: Phaser.Scene): void {
 /**
  * 构建地形：从 Tiled 地图（maps/lost-temple.tmj）读取 gid 网格，
  * 逐格铺贴 add.image 渲染，并反推地形网格写入 terrain 模块（单一数据源）。
+ * @param parent 地图层容器（Container），瓦片会 add 进它而不是根显示列表，
+ *               这样 DevTools inspector 能按“地图层”归类全部地形瓦片。
  */
-export function buildTerrainTilemap(scene: Phaser.Scene): void {
+export function buildTerrainTilemap(
+    scene: Phaser.Scene,
+    parent: Phaser.GameObjects.Container
+): void {
     ensureTerrainTileset(scene);
 
     const map = scene.make.tilemap({ key: "lost-temple" });
@@ -171,6 +176,7 @@ export function buildTerrainTilemap(scene: Phaser.Scene): void {
             const { sx, sy } = worldToScreen(x + 0.5, y + 0.5);
             const img = scene.add.image(sx, sy, "terrain", "terrain-" + frameIdx);
             img.setDepth(-1000); // 地形层最底，单位/建筑/特效覆于其上
+            parent.add(img);     // 进地图层容器（容器在 (0,0)，世界坐标直接定位）
         }
         grid.push(row);
     }

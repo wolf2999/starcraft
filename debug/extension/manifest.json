@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "Phaser Inspector (DevTools)",
+  "version": "0.1.0",
+  "description": "在 Chrome DevTools 侧栏查看 Phaser 游戏的场景与对象树，点击对象可在游戏内短暂高亮定位。",
+  "devtools_page": "devtools.html",
+  "minimum_chrome_version": "102"
+}
