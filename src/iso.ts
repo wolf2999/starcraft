@@ -24,9 +24,12 @@ export const TILE_H = 32; // 菱形 tile 高（屏幕像素）
 export const HALF_W = TILE_W / 2;
 export const HALF_H = TILE_H / 2;
 
+/** 每级地形高度在屏幕上抬升的像素数（等距下取半菱形高，刚好像一级“台阶”） */
+export const ELEV = HALF_H;
+
 /** 地图在世界格中的尺寸（格） */
-export const MAP_COLS = 20;
-export const MAP_ROWS = 20;
+export const MAP_COLS = 32;
+export const MAP_ROWS = 32;
 
 /** 菱形地图整体像素尺寸 */
 export const MAP_W = (MAP_COLS + MAP_ROWS) * HALF_W;
@@ -49,8 +52,16 @@ export interface ScreenPoint {
   sy: number;
 }
 
-/** 世界格坐标 → 屏幕像素坐标（渲染用） */
-export function worldToScreen(wx: number, wy: number): ScreenPoint {
+/**
+ * 世界格坐标 → 屏幕像素坐标（渲染用）。
+ * 注意：地形抬高（ELEV）不再参与投影——地形高低差改由 Tilemap 瓦片美术表现，
+ * 单位统一贴地绘制，避免与扁平 tilemap 错位。h 仅为兼容旧调用，已忽略。
+ */
+export function worldToScreen(
+  wx: number,
+  wy: number,
+  _h = 0
+): ScreenPoint {
   return {
     sx: ORIGIN_X + (wx - wy) * HALF_W,
     sy: ORIGIN_Y + (wx + wy) * HALF_H,

@@ -22,8 +22,54 @@ export type ResourceType = "minerals" | "vespene";
 /** 实体大类 */
 export type EntityKind = "unit" | "building";
 
-/** 阵营归属（用于敌我判定） */
-export type Owner = "player" | "enemy" | "neutral";
+/**
+ * 阵营（归属）枚举。
+ * - player：人类玩家
+ * - neutral：中立（矿/气/可破坏物）
+ * - ai1~ai7：7 个 AI 阵营，彼此独立、互不友好，可互相攻击
+ *
+ * 这样扩展后即可支持“8 人混战（FFA）”：每个 AI 是一个独立 owner，
+ * 战斗时通过 owner 相等来判断是否友军，从而让 AI 之间也会互相打。
+ */
+export type Owner =
+  | "player"
+  | "neutral"
+  | "ai1"
+  | "ai2"
+  | "ai3"
+  | "ai4"
+  | "ai5"
+  | "ai6"
+  | "ai7";
+
+/** 是否属于 AI 阵营（区别于玩家与中立） */
+export function ownerIsAI(owner: string): boolean {
+  return owner.startsWith("ai");
+}
+
+/** 阵营显示/描边颜色（HUD、子弹、单位染色） */
+export const OWNER_COLORS: Record<string, number> = {
+  player: 0x2e6cb8, // 蓝
+  ai1: 0xd64545, // 红
+  ai2: 0x4a7fd6, // 蓝
+  ai3: 0x9b4ad6, // 紫
+  ai4: 0xd6b04a, // 金
+  ai5: 0x33c9a0, // 青
+  ai6: 0xd64a8c, // 粉
+  ai7: 0x6ad64a, // 绿
+};
+
+/** 取阵营颜色，未知阵营回退白色 */
+export function ownerColor(owner: string): number {
+  return OWNER_COLORS[owner] ?? 0xffffff;
+}
+
+/**
+ * 调试开关：是否允许 AI 单位主动索敌/移动。
+ * 设为 false 时 AI 单位不会 acquireTarget、不会主动移动，方便单独调试
+ * 玩家单位的刷新、框选与移动逻辑。需要时改回 true 即可恢复 8 人混战。
+ */
+export const AI_AGGRESSIVE = false;
 
 /** 攻击可命中的目标类型 */
 export type AttackTargetType = "ground" | "air" | "both";

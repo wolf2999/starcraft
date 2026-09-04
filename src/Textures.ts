@@ -214,8 +214,9 @@ function makeGlow(scene: Phaser.Scene, key: string, color: string) {
 function terranBuilding(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
+  const texKey = d.tex ?? d.id;
+  scene.textures.remove(texKey);
+  const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);
@@ -252,8 +253,9 @@ function terranBuilding(scene: Phaser.Scene, d: Def) {
 function terranUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
+  const texKey = d.tex ?? d.id;
+  scene.textures.remove(texKey);
+  const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);
@@ -325,8 +327,9 @@ function protossBuilding(scene: Phaser.Scene, d: Def) {
 function protossUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
+  const texKey = d.tex ?? d.id;
+  scene.textures.remove(texKey);
+  const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);
@@ -364,8 +367,9 @@ function protossUnit(scene: Phaser.Scene, d: Def) {
 function zergBuilding(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
+  const texKey = d.tex ?? d.id;
+  scene.textures.remove(texKey);
+  const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);
@@ -400,8 +404,9 @@ function zergBuilding(scene: Phaser.Scene, d: Def) {
 function zergUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
+  const texKey = d.tex ?? d.id;
+  scene.textures.remove(texKey);
+  const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);

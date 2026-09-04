@@ -9,21 +9,22 @@ import {
   BUILDINGS as TERRAN_BUILDINGS,
   PROTOSS_BUILDINGS,
   ZERG_BUILDINGS,
-  FACTION_COLORS,
   GAME_WIDTH,
   GAME_HEIGHT,
+  Owner,
+  ownerIsAI,
+  ownerColor,
+  AI_AGGRESSIVE,
 } from "../config";
 import { generateAll } from "../Textures";
-import type { Faction } from "../config";
 import {
   TILE_W,
   TILE_H,
-  MAP_COLS,
-  MAP_ROWS,
   worldToScreen,
   screenToWorld,
-  screenRectContainsWorld,
 } from "../iso";
+import { buildTerrainTilemap } from "../tilemap";
+import { getLostTemple } from "../maps/lostTemple";
 
 export class GameScene extends Phaser.Scene {
   entities: Entity[] = [];
@@ -42,9 +43,24 @@ export class GameScene extends Phaser.Scene {
   creepLayer!: Phaser.GameObjects.Graphics;
   resourceLayer!: Phaser.GameObjects.Container;
   larvaTimers: { ent: Entity; t: number }[] = [];
+  cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+
+  /** HUD DOM 节点（跟相机/画布解耦，永远钉在浏览器视口左上角） */
+  hudEl: HTMLElement | null = null;
 
   constructor() {
     super("game");
+  }
+
+  preload() {
+    // Tiled 导出的等距地图（地形层 + 瓦片引用），运行期由 buildTerrainTilemap 消费
+    this.load.tilemapTiledJSON("lost-temple", "maps/lost-temple.tmj");
+    // 等距地形 tileset 贴图（5 格横排：low/high/ramp/water/bridge）。
+    // 优先用真实 PNG（可用 scripts/gen-tileset.mjs 或从外部导入）；
+    // 若加载失败（资源缺失），ensureTerrainTileset 会兜底生成 program texture。
+    // terrain.png 真源在 public/maps/（与 lost-temple.tmj 同目录），
+    // 用无 ../ 的相对引用，Tiled 与游戏端都能稳定找到。
+    this.load.image("terrain", "maps/terrain.png");
   }
 
   create() {
@@ -57,44 +73,56 @@ export class GameScene extends Phaser.Scene {
     this.creepLayer.setDepth(5);
 
     generateAll(this);
-    this.drawGround();
 
-    // 资源节点（世界格坐标）
-    const minerals = [
-      [4, 4],
-      [5, 4],
-      [4, 5],
-      [15, 15],
-      [14, 15],
-      [15, 14],
-    ];
-    minerals.forEach(([gx, gy]) => this.spawnResource("mineral", gx, gy));
-    this.spawnResource("vespene", 7, 6);
-    this.spawnResource("vespene", 13, 14);
+    // 加载 Lost Temple 风格地图（地形 + 资源 + 出生点）
+    const map = getLostTemple();
+    // 用 Phaser Tilemap + Tiled 渲染地形（maps/lost-temple.tmj），
+    // 并由瓦片 gid 反推地形网格供寻路/出生点使用
+    buildTerrainTilemap(this);
 
-    // 玩家基地（虫族孵化场）
-    this.spawnFromDef(10, 10, "hatchery", "player", true);
-    this.spawnFromDef(9, 9, "drone", "player");
-    this.spawnFromDef(11, 9, "drone", "player");
-    this.spawnFromDef(10, 12, "larva", "player");
-    this.spawnFromDef(9.4, 11.4, "larva", "player");
-    this.spawnFromDef(10.6, 11.4, "larva", "player");
+    // 资源节点
+    map.resources.forEach((r) => this.spawnResource(r.kind, r.gx, r.gy));
 
-    // 敌方基地（人族指挥中心和神族基地）
-    this.spawnFromDef(15, 15, "cc", "enemy", true);
-    this.spawnFromDef(17, 14, "sd", "enemy", true);
-    this.spawnFromDef(14, 17, "barracks", "enemy", true);
-    this.spawnFromDef(13, 16, "marine", "enemy");
-    this.spawnFromDef(16, 13, "marine", "enemy");
-    this.spawnFromDef(14, 14, "scv", "enemy");
-
-    this.spawnFromDef(11, 15, "nexus", "enemy", true);
-    this.spawnFromDef(10, 15, "pylon", "enemy", true);
-    this.spawnFromDef(12, 14, "gateway", "enemy", true);
-    this.spawnFromDef(10, 16, "zealot", "enemy");
-    this.spawnFromDef(12, 16, "dragoon", "enemy");
+    // 出生点（基地 + 附属单位）
+    for (const b of map.bases) {
+      this.spawnFromDef(b.gx, b.gy, b.defId, b.owner, true);
+      if (b.units) {
+        for (const u of b.units) {
+          this.spawnFromDef(b.gx + u.dx, b.gy + u.dy, u.defId, b.owner);
+        }
+      }
+    }
 
     this.updateSupply();
+
+    // 相机：初始放大并对准玩家出生点，让开局单位清晰分离、可逐个点选。
+    // 之前整张 32×32 地图被缩到一屏（zoom≈0.59），玩家基地被挤到屏幕顶端一条
+    // ~76×28px 的窄带里，多个单位完全重叠成一团，导致“只能选中露在外面的 1~2 个”。
+    const cam = this.cameras.main;
+    const playerBase = map.bases.find((b) => b.owner === "player");
+    const focus = playerBase
+      ? worldToScreen(playerBase.gx, playerBase.gy)
+      : { sx: GAME_WIDTH / 2, sy: GAME_HEIGHT / 2 };
+    cam.setZoom(0.95);
+    cam.centerOn(focus.sx, focus.sy);
+    // 放宽边界，允许方向键/滚轮查看更大范围（含地图中心与敌方出生点）
+    cam.setBounds(-1600, -1200, 4400, 3000);
+    cam.setBackgroundColor("#10221a");
+
+    this.cursors = this.input.keyboard?.createCursorKeys();
+    this.input.on(
+      "wheel",
+      (
+        _p: Phaser.Input.Pointer,
+        _o: unknown,
+        _dx: number,
+        dy: number
+      ) => {
+        const z = Phaser.Math.Clamp(cam.zoom - dy * 0.001, 0.25, 2);
+        cam.setZoom(z);
+      }
+    );
+
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => this.onPointerUp(p));
@@ -107,15 +135,8 @@ export class GameScene extends Phaser.Scene {
       this.clearSelection();
     });
 
-    this.add
-      .text(12, 12, "", {
-        fontFamily: "monospace",
-        fontSize: "13px",
-        color: "#cfe",
-        backgroundColor: "#00000088",
-      })
-      .setDepth(5000)
-      .setName("hud");
+    // HUD：DOM 渲染，跟相机/画布解耦，永远钉在浏览器视口左上角
+    this.hudEl = document.getElementById("hud");
     this.updateHud();
     } catch (e: any) {
       this.add
@@ -130,19 +151,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  drawGround() {
-    // 菱形 tile 平铺：按 (gx, gy) 网格循环，投影后铺满整张地图
-    for (let gx = 0; gx < MAP_COLS; gx++) {
-      for (let gy = 0; gy < MAP_ROWS; gy++) {
-        const { sx, sy } = worldToScreen(gx + 0.5, gy + 0.5);
-        const img = this.add.image(sx, sy, "tile_ground").setOrigin(0.5, 0.5);
-        img.setDepth(gx + gy); // 等距下 gx+gy 越小越靠后
-      }
-    }
-    // 给相机一个合适边界
-    this.cameras.main.setBounds(-200, -200, GAME_WIDTH + 400, GAME_HEIGHT + 400);
-  }
-
   spawnResource(id: string, gx: number, gy: number) {
     const def = RESOURCE_DEFS[id];
     const e = new Entity(this, def, gx, gy, "neutral");
@@ -155,7 +163,7 @@ export class GameScene extends Phaser.Scene {
     x: number,
     y: number,
     defId: string,
-    owner: Faction,
+    owner: Owner,
     constructed = true
   ): Entity {
     const def = ALL_DEFS[defId];
@@ -169,19 +177,13 @@ export class GameScene extends Phaser.Scene {
 
     if (def.isNeutral) {
       // 资源节点无所属
-    } else if (owner === "enemy") {
-      e.setFaction("enemy", FACTION_COLORS.enemy);
-    }
-
-    // 神族护盾战斗单位默认护盾满
-    if (def.shield) {
-      e.maxShield = def.shield;
-      e.shield = def.shield;
-    }
-
-    // 敌方战斗单位默认好斗
-    if (owner === "enemy" && (def.groundDamage || def.airDamage) && !def.isBuilding) {
-      e.aggressive = true;
+    } else if (ownerIsAI(owner)) {
+      // AI 阵营按各自颜色染色
+      e.setFaction(owner, ownerColor(owner));
+      // 好斗（主动索敌/移动）受全局调试开关控制，便于单独调玩家单位
+      if (AI_AGGRESSIVE && (def.groundDamage || def.airDamage) && !def.isBuilding) {
+        e.aggressive = true;
+      }
     }
 
     // 初始化战斗特效回调
@@ -265,9 +267,10 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    // 左键开始框选
+    // 左键开始框选：记录“游戏世界坐标”起点（格坐标），避免相机偏移导致判定错位
+    const w = screenToWorld(p.worldX, p.worldY);
     this.selecting = true;
-    this.selStart.set(p.worldX, p.worldY);
+    this.selStart.set(w.wx, w.wy);
   }
 
   onPointerMove(p: Phaser.Input.Pointer) {
@@ -282,10 +285,12 @@ export class GameScene extends Phaser.Scene {
       this.selRect.clear();
       this.selRect.lineStyle(1.5, 0x66ff99, 0.9);
       this.selRect.fillStyle(0x66ff99, 0.12);
-      const x = Math.min(this.selStart.x, p.worldX);
-      const y = Math.min(this.selStart.y, p.worldY);
-      const w = Math.abs(p.worldX - this.selStart.x);
-      const h = Math.abs(p.worldY - this.selStart.y);
+      // selStart 是世界坐标，绘制时反投影回相机空间（屏幕像素）
+      const s = worldToScreen(this.selStart.x, this.selStart.y);
+      const x = Math.min(s.sx, p.worldX);
+      const y = Math.min(s.sy, p.worldY);
+      const w = Math.abs(p.worldX - s.sx);
+      const h = Math.abs(p.worldY - s.sy);
       this.selRect.fillRect(x, y, w, h);
       this.selRect.strokeRect(x, y, w, h);
     }
@@ -295,36 +300,45 @@ export class GameScene extends Phaser.Scene {
     if (!this.selecting) return;
     this.selecting = false;
     this.selRect.clear();
-    const x = Math.min(this.selStart.x, p.worldX);
-    const y = Math.min(this.selStart.y, p.worldY);
-    const w = Math.abs(p.worldX - this.selStart.x);
-    const h = Math.abs(p.worldY - this.selStart.y);
+    // 终点也反投影成游戏世界坐标（格坐标），与 entity.x/y 同一坐标系
+    const w = screenToWorld(p.worldX, p.worldY);
+    const x = Math.min(this.selStart.x, w.wx);
+    const y = Math.min(this.selStart.y, w.wy);
+    const ww = Math.abs(w.wx - this.selStart.x);
+    const wh = Math.abs(w.wy - this.selStart.y);
 
-    if (w < 6 && h < 6) {
-      // 点选：反投影找最近单位
-      const wp = screenToWorld(p.worldX, p.worldY);
+    if (ww < 0.5 && wh < 0.5) {
+      // 点选：在游戏世界坐标下按半径判定（高地单位同样精准）
       let best: Entity | null = null;
       let bestD = Infinity;
       for (const e of this.entities) {
         if (!e.alive || e.owner !== "player" || e.def.isNeutral) continue;
-        const d = Phaser.Math.Distance.Between(wp.wx, wp.wy, e.x, e.y);
-        const rr = (e.def.size ?? 20) / 128 + 1.2;
+        const d = Phaser.Math.Distance.Between(w.wx, w.wy, e.x, e.y);
+        const rr = (e.r ?? 0.5) + 0.9; // 世界单位（格）半径
         if (d < rr && d < bestD) {
           bestD = d;
           best = e;
         }
       }
-      this.clearSelection();
       if (best) {
+        // 点中我方单位：替换选区（与星际一致——左键点单位=选中该单位）
+        this.clearSelection();
         best.selected = true;
         this.selection.push(best);
+      } else if (this.selection.length > 0) {
+        // 点中空地且已有选区：下达移动指令（左键也能移动，更直观，
+        // 避免用户误用左键点空地导致选区被清空而“无法移动”）
+        this.commandRightClick(w.wx, w.wy);
+      } else {
+        // 空地且无选区：清空
+        this.clearSelection();
       }
     } else {
-      // 框选：用屏幕矩形反投影成世界 AABB 判定
+      // 框选：单位游戏世界坐标落在矩形内即选中
       this.clearSelection();
       for (const e of this.entities) {
         if (!e.alive || e.owner !== "player" || e.def.isNeutral) continue;
-        if (screenRectContainsWorld(x, y, w, h, e.x, e.y)) {
+        if (e.x >= x && e.x <= x + ww && e.y >= y && e.y <= y + wh) {
           e.selected = true;
           this.selection.push(e);
         }
@@ -400,11 +414,27 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 战斗推进（世界坐标）
+    // 单个实体的内部异常（例如 stepMove 寻路失败、sprite 缺失等）不应让整个 update 中止，
+    // 否则后续实体的渲染同步也会被跳过，表现就是“只能移动前几个实体”。
     for (const e of this.entities) {
       if (!e.alive) continue;
-      e.updateCombat(dt);
-      if (e.def.isBuilding) continue;
-      this.updateGather(e, dt);
+      try {
+        e.updateCombat(dt);
+        if (!e.def.isBuilding) this.updateGather(e, dt);
+      } catch (err) {
+        // 静默兜底，避免抛错让 update 整体崩溃；
+        // 把当前目标清掉，让该单位停下而不是反复崩溃。
+        e.moveTargetX = null;
+        e.moveTargetY = null;
+        e.combatTarget = null;
+        e.path = [];
+        e.pathIndex = 0;
+        // 下一帧会重新进入战斗循环
+        if ((this as any)._errLog < 3) {
+          console.warn("[entity update skipped]", e.def?.id, err);
+          (this as any)._errLog = ((this as any)._errLog || 0) + 1;
+        }
+      }
     }
 
     // 渲染同步（投影到屏幕 + 深度排序）
@@ -427,6 +457,16 @@ export class GameScene extends Phaser.Scene {
     if (this.entities.length !== before) this.updateSupply();
 
     this.updateHud();
+
+    // 方向键平移相机（32×32 地图较大，便于巡视）
+    const cam = this.cameras.main;
+    const sp = (700 * dt) / cam.zoom;
+    if (this.cursors) {
+      if (this.cursors.left?.isDown) cam.scrollX -= sp;
+      if (this.cursors.right?.isDown) cam.scrollX += sp;
+      if (this.cursors.up?.isDown) cam.scrollY -= sp;
+      if (this.cursors.down?.isDown) cam.scrollY += sp;
+    }
   }
 
   updateGather(e: Entity, dt: number) {
@@ -443,7 +483,7 @@ export class GameScene extends Phaser.Scene {
         e.gatherState = "mining";
         e.mineTimer = 1.5;
       } else {
-        e.moveToward(res.x, res.y, dt);
+        e.stepMove(dt, res.x, res.y);
       }
     } else if (e.gatherState === "mining") {
       e.mineTimer -= dt;
@@ -470,7 +510,7 @@ export class GameScene extends Phaser.Scene {
         e.carrying = 0;
         e.gatherState = "toResource";
       } else {
-        e.moveToward(b.x, b.y, dt);
+        e.stepMove(dt, b.x, b.y);
       }
     }
   }
@@ -502,9 +542,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   drawShot(from: Entity, to: Entity) {
-    const colorFor = (o: Faction) =>
-      o === "enemy" ? 0xff6655 : o === "player" ? 0x66ff88 : 0xffffff;
-    const color = colorFor(from.owner);
+    const color = ownerColor(from.owner);
     const { sx: sx1, sy: sy1 } = worldToScreen(from.x, from.y);
     const { sx: sx2, sy: sy2 } = worldToScreen(to.x, to.y);
     const line = this.add.graphics().setDepth(3000);
@@ -559,14 +597,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateHud() {
-    const hud = this.children.getByName("hud") as Phaser.GameObjects.Text;
-    if (!hud) return;
+    if (!this.hudEl) return;
     const n = this.entities.filter((e) => e.owner === "player" && !e.def.isNeutral).length;
-    hud.setText(
-      `矿物 ${this.minerals}  气 ${this.vespene}  人口 ${this.supplyUsed}/${this.supplyProvided}\n` +
-        `选中 ${this.selection.length}  我方单位 ${n}\n` +
-        `左键框选 / 右键移动·攻击·采集  A+左键 攻击移动  ESC 取消`
-    );
+    this.hudEl.textContent =
+      `矿物 ${this.minerals}   气 ${this.vespene}   人口 ${this.supplyUsed}/${this.supplyProvided}\n` +
+      `选中 ${this.selection.length}   我方单位 ${n}\n` +
+      `左键框选  右键移动·攻击·采集\n` +
+      `A + 左键 攻击移动  ESC 取消`;
   }
 }
 

@@ -1,15 +1,18 @@
 import * as Phaser from "phaser";
 import type { Def } from "./config";
 import { ALL_DEFS, RESOURCE_DEFS } from "./config";
-import type { Faction } from "./config";
-import { worldToScreen } from "./iso";
+import type { Owner } from "./config";
+import { ownerIsAI } from "./config";
+import { worldToScreen, TILE_W } from "./iso";
+import { heightAt } from "./terrain";
+import { findPath, PathCell } from "./pathfinding";
 
 let _id = 0;
 
 export class Entity {
   id: number;
   def: Def;
-  owner: Faction;
+  owner: Owner;
   scene: Phaser.Scene;
   sprite: Phaser.GameObjects.Image;
   hpBar: Phaser.GameObjects.Graphics;
@@ -37,6 +40,13 @@ export class Entity {
   moveTargetY: number | null = null;
   attackMove = false;
 
+  // 寻路：A* 计算出的格子路点（绕开水面/高地）
+  path: PathCell[] = [];
+  pathIndex = 0;
+  private pathGoalX = NaN;
+  private pathGoalY = NaN;
+  private repathCooldown = 0;
+
   // 战斗
   combatTarget: Entity | null = null;
   attackCooldown = 0;
@@ -50,7 +60,7 @@ export class Entity {
   mineTimer = 0;
   animateTimer = 0;
 
-  constructor(scene: Phaser.Scene, def: Def, x: number, y: number, owner: Faction) {
+  constructor(scene: Phaser.Scene, def: Def, x: number, y: number, owner: Owner) {
     this.id = _id++;
     this.def = def;
     this.scene = scene;
@@ -65,19 +75,32 @@ export class Entity {
     this.factionTint = 0xffffff;
 
     const { sx, sy } = worldToScreen(x, y);
-    this.sprite = scene.add.image(sx, sy, def.id).setOrigin(0.5, 0.72);
+    // 纹理 key 应当用 def.tex（资源的“美术键”），之前误用 def.id 导致
+    // “No texture found matching key: scv/marine/b_cc/...” 控制台刷屏
+    // （参考之前 stepMove 异常的次根因：纹理缺失触发 sprite 渲染异常）。
+    this.sprite = scene.add.image(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
     if (!def.isBuilding) this.sprite.setDepth(1000 + x + y);
 
     this.selectionRing = scene.add.graphics();
     this.hpBar = scene.add.graphics();
     this.hpBar.setDepth(2000);
     this.selectionRing.setDepth(1999);
+
+    // 寻路缓存与冷却，构造时必须初始化为安全默认值：
+    // stepMove 里 this.path.length 的访问依赖此字段为数组，
+    // 之前在移动分支中曾触发 "Cannot read property 'length' of undefined" 崩溃
+    // （参考 stepMove → entities.ts:199 异常根因）。
+    this.path = [] as Array<{ x: number; y: number }>;
+    this.pathIndex = 0;
+    this.pathGoalX = NaN;
+    this.pathGoalY = NaN;
+    this.repathCooldown = 0;
   }
 
-  /** 设置阵营染色（用于敌方阵营） */
-  setFaction(faction: Faction, tint: number) {
+  /** 设置阵营染色（仅 AI 阵营染色，玩家保持本色） */
+  setFaction(owner: Owner, tint: number) {
     this.factionTint = tint;
-    if (faction === "enemy") {
+    if (ownerIsAI(owner)) {
       this.sprite.setTint(tint);
     }
     return this;
@@ -126,12 +149,16 @@ export class Entity {
     this.moveTargetY = null;
     this.attackMove = false;
     this.aggressive = false;
+    this.path = [];
+    this.pathIndex = 0;
   }
 
   /** 攻击/索敌/移动每帧推进（工作在“世界格坐标”下，无需等距） */
   updateCombat(dt: number) {
-    if (this.def.isBuilding || this.isAir) {
-      // 建筑不主动移动；空军可空中索敌但仍不移动（demo 简化）
+    // 建筑完全不动：直接 return，避免下面的移动/索敌分支引用陈旧的 moveTarget/combatTarget
+    // 触发 stepMove 导致异常（参考之前 stepMove → entities.ts:199 崩溃的根因）。
+    if (this.def.isBuilding) {
+      return;
     }
     if (this.attackCooldown > 0) this.attackCooldown -= dt * 1000;
 
@@ -145,18 +172,21 @@ export class Entity {
     if (this.combatTarget) {
       const t = this.combatTarget as Entity;
       const d = Phaser.Math.Distance.Between(this.x, this.y, t.x, t.y);
-      const reach = (this.def.range ?? 0) + this.r + t.r;
+      // reach 统一换算到“格”量纲：range 与半径 r 都是 px，需除以 TILE_W
+      const reach =
+        (this.def.range ?? 0) / TILE_W + this.r / TILE_W + t.r / TILE_W;
       if (d <= reach) {
         // 在射程内：停下开火
         this.moveTargetX = null;
         this.moveTargetY = null;
+        this.path = [];
         if (this.attackCooldown <= 0) {
           this.fire(t);
           this.attackCooldown = this.def.attackInterval ?? 1000;
         }
       } else {
-        // 接近目标（攻击移动时也接受被攻击反击）
-        this.moveToward(t.x, t.y, dt);
+        // 接近目标（沿地形路径，绕开水面/高地）
+        this.stepMove(dt, t.x, t.y);
       }
       return;
     }
@@ -167,8 +197,9 @@ export class Entity {
       if (d < 0.5) {
         this.moveTargetX = null;
         this.moveTargetY = null;
+        this.path = [];
       } else {
-        this.moveToward(this.moveTargetX, this.moveTargetY, dt);
+        this.stepMove(dt, this.moveTargetX, this.moveTargetY);
       }
     }
 
@@ -178,8 +209,9 @@ export class Entity {
       if (d < 0.5) {
         this.moveTargetX = null;
         this.moveTargetY = null;
+        this.path = [];
       } else {
-        this.moveToward(this.moveTargetX, this.moveTargetY, dt);
+        this.stepMove(dt, this.moveTargetX, this.moveTargetY);
       }
     }
   }
@@ -204,10 +236,85 @@ export class Entity {
     const dx = tx - this.x;
     const dy = ty - this.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const speed = this.def.speed ?? 1.5; // 格/秒
+    // def.speed 量纲为 px/秒（StarCraft 原始值，如 90），世界坐标以“格”为单位，
+    // 1 格 = TILE_W 像素，故需除以 TILE_W 换算成 格/秒，否则会瞬间瞬移。
+    const speed = (this.def.speed ?? 90) / TILE_W; // grid/秒
     const step = Math.min(speed * dt, dist - 0.01);
     this.x += (dx / dist) * step;
     this.y += (dy / dist) * step;
+  }
+
+  /**
+   * 沿地形代价路径朝目标移动（真正绕开水面/高地）。
+   * - 空军直接直线飞（无视地形）。
+   * - 地面单位：A* 计算出绕开悬崖/水面的路点，逐格逼近；
+   *   无路可走时退回直线移动，保证不卡死。
+   * 返回是否已抵达最终目标点。
+   */
+  stepMove(dt: number, tx: number, ty: number): boolean {
+    // 防御：极端情况下 path 未初始化（构造时已默认 []，此处再做一次兜底）
+    if (!this.path) this.path = [];
+    if (!Number.isFinite(tx) || !Number.isFinite(ty)) {
+      // 非法目标坐标：直接放弃，不抛错
+      return false;
+    }
+
+    if (this.isAir) {
+      this.moveToward(tx, ty, dt);
+      return Phaser.Math.Distance.Between(this.x, this.y, tx, ty) < 0.5;
+    }
+
+    this.repathCooldown -= dt;
+    const goalMoved =
+      Math.abs(tx - this.pathGoalX) > 0.4 || Math.abs(ty - this.pathGoalY) > 0.4;
+    // 首次 / 目标移动明显 / 冷却到期 → 重新寻路
+    if (
+      isNaN(this.pathGoalX) ||
+      goalMoved ||
+      this.repathCooldown <= 0
+    ) {
+      this.recomputePath(tx, ty);
+    }
+
+    // 无路可走：兜底直线移动
+    if (!this.path || this.path.length === 0) {
+      this.moveToward(tx, ty, dt);
+      return false;
+    }
+
+    // 朝当前路点移动，抵达后切换到下一个路点
+    let wp = this.path[this.pathIndex];
+    // 防御：pathIndex 越界则回到首格
+    if (!wp) {
+      this.pathIndex = 0;
+      wp = this.path[0];
+      if (!wp) {
+        this.moveToward(tx, ty, dt);
+        return false;
+      }
+    }
+    const d = Phaser.Math.Distance.Between(this.x, this.y, wp.x + 0.5, wp.y + 0.5);
+    if (d < 0.35) {
+      this.pathIndex++;
+      if (this.pathIndex >= this.path.length) {
+        // 最后一段：直奔精确目标点
+        this.moveToward(tx, ty, dt);
+        return Phaser.Math.Distance.Between(this.x, this.y, tx, ty) < 0.6;
+      }
+    }
+    const tgt = this.path[this.pathIndex];
+    this.moveToward(tgt.x + 0.5, tgt.y + 0.5, dt);
+    return false;
+  }
+
+  /** 用 A* 重算从当前位置到目标的路径 */
+  private recomputePath(tx: number, ty: number) {
+    const p = findPath(this.x, this.y, tx, ty);
+    this.path = p && p.length > 0 ? p : [];
+    this.pathIndex = 0;
+    this.pathGoalX = tx;
+    this.pathGoalY = ty;
+    this.repathCooldown = 0.5; // 0.5s 内不重复寻路
   }
 
   fire(target: Entity) {
@@ -232,9 +339,11 @@ export class Entity {
   /* ============ 渲染同步（每帧把世界坐标投影到屏幕） ============ */
 
   syncRender() {
-    const { sx, sy } = worldToScreen(this.x, this.y);
+    const h = heightAt(this.x, this.y);
+    const { sx, sy } = worldToScreen(this.x, this.y, h);
     this.sprite.setPosition(sx, sy);
-    if (!this.def.isBuilding) this.sprite.setDepth(1000 + this.x + this.y);
+    if (!this.def.isBuilding)
+      this.sprite.setDepth(1000 + this.x + this.y + h * 100);
     this.drawHpBar();
     this.drawSelectionRing();
   }
@@ -247,7 +356,7 @@ export class Entity {
       return;
 
     const barW = Math.max(20, this.def.size ?? 24);
-    const { sx, sy } = worldToScreen(this.x, this.y);
+    const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
     const topY = sy - this.sprite.displayHeight * 0.78 - 8;
 
     if (this.maxShield > 0) {
@@ -272,7 +381,7 @@ export class Entity {
     const g = this.selectionRing;
     g.clear();
     if (!this.selected) return;
-    const { sx, sy } = worldToScreen(this.x, this.y);
+    const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
     const ry = this.def.isAir ? this.sprite.displayHeight * 0.45 : 6;
     g.lineStyle(2, 0x00ff66, 0.9);
     g.strokeEllipse(sx, sy, this.def.size ?? 24, ry);
