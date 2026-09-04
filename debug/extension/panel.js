@@ -149,30 +149,55 @@ function evalExpr(expr, cb) {
   });
 }
 
+// 安全调用“被检查页面”侧 window.__PI_AGENT__ 上的方法。
+// 若 window.__PI_AGENT__ 尚未挂上，或该方法不存在（例如页面还没准备好、
+// 或注入失败重试中），直接返回 null 的求值表达式——而不会抛
+// “Cannot read properties of undefined (reading 'xxx')” 这类红错刷屏。
+// 这是兼容 Phaser 4 + Layer 等场景的关键防护：无论被检查页面处于何种状态，
+// 面板轮询/点击都不会因属性 undefined 而中断。
+function agentExpr(method, argsLiteral) {
+  const isFn =
+    "(window.__PI_AGENT__ && typeof window.__PI_AGENT__." + method + " === 'function')";
+  return isFn + " ? window.__PI_AGENT__." + method + "(" + argsLiteral + ") : null";
+}
+
 // 把 agent 函数体注入被检查页面。注入流程：
 // 1. eval AGENT_SOURCE（IIFE）→ 返回 agent 对象（Chrome 会序列化一份快照）
 // 2. 同时 IIFE 末尾把同一个对象挂到 window.__PI_AGENT__（让后续 eval 能直接调用，
 //    因为 eval 字符串在被检查页面 VM 执行，看不到扩展的局部变量）
 // 3. 把 eval 返回对象当 ready 标记（listScenes 是否为函数）；不靠它做实际调用。
 function injectAgent(done) {
-  evalExpr(AGENT_SOURCE, (result, err) => {
-    if (err) {
-      setStatus("[panel] agent 注入 SyntaxError：" + (err.description || JSON.stringify(err)));
-      return;
-    }
-    if (result && typeof result === "object") {
-      // Chrome 跨世界 eval 会把返回值序列化；只要 result 是非 null 对象，
-      // 就说明 IIFE 已执行且 window.__PI_AGENT__ 也被挂上了（同一段代码末尾赋值）。
-      agent = result;
-      setStatus(""); // 清掉上一次可能留下的错误提示
-      if (typeof done === "function") done();
-    } else {
-      setStatus(
-        "agent 注入失败（被检查页面还没准备好或存在其它脚本错误）。" +
-        "请确认：1) 控制台无红色 SyntaxError；2) 游戏入口已挂 window.__GAME__；3) 刷新后重试。"
+  // Chrome 会把跨世界 eval 的返回值序列化，函数字段会丢失，
+  // 所以不能只看 result 是否含方法。以“页面侧 window.__PI_AGENT__ 是否就位”为判定标准，
+  // 并对时序问题（页面尚未加载完 / 游戏实例未挂）做有限次重试。
+  const tryInject = (attempt) => {
+    evalExpr(AGENT_SOURCE, (result, err) => {
+      if (err) {
+        setStatus("[panel] agent 注入 SyntaxError：" + (err.description || JSON.stringify(err)));
+        return;
+      }
+      evalExpr(
+        "typeof window.__PI_AGENT__ === 'object' && !!window.__PI_AGENT__",
+        (ok) => {
+          if (ok) {
+            // 标记注入成功（result 仅是序列化快照，真正调用走页面侧 window.__PI_AGENT__）
+            agent = result || true;
+            setStatus(""); // 清掉上一次可能留下的错误提示
+            if (typeof done === "function") done();
+          } else if (attempt < 4) {
+            setStatus("agent 未就绪，重试中… (" + attempt + "/4)");
+            setTimeout(() => tryInject(attempt + 1), 300);
+          } else {
+            setStatus(
+              "agent 注入失败（页面未挂上 window.__PI_AGENT__）。" +
+              "请确认：1) 被检查页面控制台无红色 SyntaxError；2) 游戏入口已挂 window.__GAME__；3) 刷新后重试。"
+            );
+          }
+        }
       );
-    }
-  });
+    });
+  };
+  tryInject(1);
 }
 
 function setStatus(msg) {
@@ -214,7 +239,7 @@ function renderScenes(scenes) {
 
 function loadObjects(sceneKey) {
   evalExpr(
-    "window.__PI_AGENT__.listObjects(" + JSON.stringify(sceneKey) + ")",
+    agentExpr("listObjects", JSON.stringify(sceneKey)),
     (objs) => renderObjects(objs || [])
   );
 }
@@ -247,8 +272,8 @@ function buildNode(o, path) {
     // 点击整行：高亮 + 切换多选选中态；若有子节点则同时折叠/展开子树
     if (currentScene)
       evalExpr(
-        "window.__PI_AGENT__.highlight(" +
-          JSON.stringify(currentScene) + "," + JSON.stringify(path) + ")"
+        agentExpr("highlight",
+          JSON.stringify(currentScene) + "," + JSON.stringify(path))
       );
     if (selectedRows.has(row)) {
       selectedRows.delete(row);
@@ -359,14 +384,14 @@ function refreshScenes() {
     return;
   }
   setStatus("");
-  evalExpr("window.__PI_AGENT__.listScenes()", (scenes) => renderScenes(scenes));
+  evalExpr(agentExpr("listScenes", ""), (scenes) => renderScenes(scenes || []));
 }
 
 // 轻量轮询：只更新当前选中 scene 的"对象数"行，不重建 DOM，避免每 2 秒全清空闪一下
 function refreshCounts() {
   if (!agent || !currentScene) return;
   evalExpr(
-    "window.__PI_AGENT__.sceneObjectCount(" + JSON.stringify(currentScene) + ")",
+    agentExpr("sceneObjectCount", JSON.stringify(currentScene)),
     (n) => {
       if (typeof n !== "number") return;
       // 找到当前选中 scene 的 div，更新尾部 "— 对象数 N"
@@ -389,8 +414,8 @@ document.getElementById("toggleVis").onclick = () => {
     const path = row.__path;
     const next = !o.visible;
     evalExpr(
-      "window.__PI_AGENT__.setVisible(" +
-        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + next + ")"
+      agentExpr("setVisible",
+        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + next)
     );
     // 本地同步：就地改数据并重绘本行（不重建整棵树，避免折叠状态丢失）
     o.visible = next;
@@ -407,8 +432,8 @@ document.getElementById("setDepthBtn").onclick = () => {
     const o = row.__o;
     const path = row.__path;
     evalExpr(
-      "window.__PI_AGENT__.setDepth(" +
-        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + val + ")"
+      agentExpr("setDepth",
+        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + val)
     );
     o.depth = val;
     const hasKids = o.children && o.children.length;
@@ -423,8 +448,8 @@ function adjustDepth(delta) {
     const path = row.__path;
     const next = (typeof o.depth === "number" ? o.depth : 0) + delta;
     evalExpr(
-      "window.__PI_AGENT__.setDepth(" +
-        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + next + ")"
+      agentExpr("setDepth",
+        JSON.stringify(currentScene) + "," + JSON.stringify(path) + "," + next)
     );
     o.depth = next;
     const hasKids = o.children && o.children.length;
