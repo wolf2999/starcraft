@@ -1,25 +1,36 @@
 // panel.js —— DevTools 侧栏面板的逻辑（跑在扩展自己的 world，不在页面里）。
 //
 // 工作流程：
-// 1. 通过 chrome.devtools.inspectedWindow.eval 把 AGENT_CODE 注入“被检查页面”，
-//    在页面里挂一个 window.__PI_AGENT__（提供 listScenes / listObjects / highlight）。
+// 1. 通过 chrome.devtools.inspectedWindow.eval 把 AGENT_SOURCE 注入“被检查页面”，
+//    eval 直接返回 agent 对象（含 listScenes / listObjects / highlight 等方法）。
 //    —— eval 跑在被检查页面的主世界，所以能读到 window.__GAME__ 这个活着的 Phaser 游戏。
-// 2. 之后所有查询都通过 eval 调用 window.__PI_AGENT__ 的方法，返回“可序列化”的快照
+// 2. 之后所有查询都通过 eval 调用 agent 的方法，返回“可序列化”的快照
 //    （GameObject 本身不能跨 world 传递，只能传纯数据）。
 // 3. 面板把快照渲染成可点的树；点场景 → 列出对象；点对象 → 在游戏里短暂高亮。
 //
 // 注意：高亮是 1.5s 的临时描边（定位用），不是常驻叠加层——你之前说“游戏里不需要”，
 // 若想彻底零绘制，把 highlight() 调用删掉即可。
 
-// —— 注入到被检查页面的 agent（字符串，eval 执行）——
-const AGENT_CODE = `
-window.__PI_AGENT__ = (function () {
-  // 优先读约定的全局游戏实例；别人用本工具时需在自己游戏里暴露同样的全局。
-  function getGame() { return (window.__GAME__ || window.__PHASER_GAME__ || null); }
+// —— 注入到被检查页面的 agent（字符串，eval 执行后把 agent 对象返给扩展）——
+// 用 IIFE 包起来，eval 直接返回 agent，省去 window.__PI_AGENT__ 这种全局污染，
+// 也能避免页面里有同名的 window.__PI_AGENT__ 时被替换。
+// 注意：不要在这里面写 TypeScript（'as'/'类型注解'），VM 里是纯 V8 JS。
+const AGENT_SOURCE = `
+// 注意：eval 跑在被检查页面的主世界，看不到扩展的局部变量，
+// 所以把结果挂到 window.__PI_AGENT__ 上并直接返回，让 panel.js 也能拿到引用。
+var agentLocal = (function () {
+  function getGame() {
+    // 仅支持 Phaser 4：游戏主动把 new Phaser.Game(config) 的返回值挂到 window.__GAME__。
+    // Phaser 4 不提供全局实例数组，game 实例只活在模块闭包里，扩展只能从页面全局取得，
+    // 所以游戏入口必须用 README 里那段代码暴露。不做任何 Phaser 3 兼容。
+    if (window.__GAME__) return window.__GAME__;
+    if (window.__PHASER_GAME__) return window.__PHASER_GAME__;
+    return null;
+  }
   // 注意：Phaser 4 里 Container.list 是 GameObject[]（数组），
   // 而 Scene.children 是 DisplayList（extends List<...>），其 .list 也是数组。
-  // 两种情况统一通过 obj.list 取子数组——以前代码把“DisplayList.list”当子 DisplayList 再 .list，
-  // 在 Container 上会拿到 undefined，导致“对象数=顶层数 / 子节点树为空 / path 步进失败”。
+  // 两种情况统一通过 obj.list 取子数组——以前代码把"DisplayList.list"当子 DisplayList 再 .list，
+  // 在 Container 上会拿到 undefined，导致"对象数=顶层数 / 子节点树为空 / path 步进失败"。
   function childrenArr(o) { return (o && o.list) ? o.list : null; }
   function countObjs(s) { try { return s.children ? s.children.list.length : 0; } catch (e) { return -1; } }
   function listScenes() {
@@ -35,9 +46,6 @@ window.__PI_AGENT__ = (function () {
     return (s.children.list || []).length;
   }
   // 递归把场景根 DisplayList 转成纯数据快照。
-  // Phaser 的 DisplayList 是树：每个 GameObject 自带 list（children），递归即可。
-  // 递归把场景根 DisplayList 转成纯数据快照。
-  // Phaser 的 DisplayList 是树：每个 GameObject 自带 list（children），递归即可。
   // 限深 8 层防页面卡死；每层软上限 5000（够用且不会把 inspectedWindow 序列化爆掉）。
   function snapshotList(list, depth) {
     if (!list || depth > 8) return [];
@@ -56,12 +64,9 @@ window.__PI_AGENT__ = (function () {
         y: Math.round(o.y || 0),
         visible: !!o.visible,
         alpha: o.alpha,
-        // 层级：Phaser 用 depth 决定渲染先后（大者盖在上面）；depth 相同则按 list 顺序
         depth: (typeof o.depth === 'number' ? o.depth : 0),
         w: Math.round((o.displayWidth || 0)),
         h: Math.round((o.displayHeight || 0)),
-        // 关键：把每个对象的子 list 也快照，形成树
-        // 用 childrenArr(o) 取数组，避免误把数组当 DisplayList 再 .list 取成 undefined
         children: (kidArr && kidArr.length) ? snapshotList({ list: kidArr }, depth + 1) : []
       });
     }
@@ -75,7 +80,6 @@ window.__PI_AGENT__ = (function () {
   function highlight(sceneKey, path) {
     var g = getGame(); if (!g) return;
     var s = g.scene.getScene(sceneKey); if (!s || !s.children) return;
-    // path 形如 [3,1,0]：按索引逐层深入
     var o = s.children.list[path[0]]; if (!o) return;
     for (var i = 1; i < path.length; i++) {
       var a = childrenArr(o); if (!a) return;
@@ -88,7 +92,6 @@ window.__PI_AGENT__ = (function () {
     gfx.strokeRectShape(b);
     s.time.delayedCall(1500, function () { gfx.destroy(); });
   }
-  // 显示/隐藏：按 path 找到对象并设 visible，返回是否成功
   function setVisible(sceneKey, path, visible) {
     var g = getGame(); if (!g) return false;
     var s = g.scene.getScene(sceneKey); if (!s || !s.children) return false;
@@ -100,7 +103,6 @@ window.__PI_AGENT__ = (function () {
     o.visible = visible;
     return true;
   }
-  // 设层级：按 path 找到对象并 setDepth（depth 大者渲染在上）
   function setDepth(sceneKey, path, depth) {
     var g = getGame(); if (!g) return false;
     var s = g.scene.getScene(sceneKey); if (!s || !s.children) return false;
@@ -113,28 +115,64 @@ window.__PI_AGENT__ = (function () {
     else o.depth = depth;
     return true;
   }
-  return { listScenes: listScenes, listObjects: listObjects, sceneObjectCount: sceneObjectCount, highlight: highlight, setVisible: setVisible, setDepth: setDepth };
+  return {
+    listScenes: listScenes,
+    listObjects: listObjects,
+    sceneObjectCount: sceneObjectCount,
+    highlight: highlight,
+    setVisible: setVisible,
+    setDepth: setDepth
+  };
 })();
+// 注意：eval 跑在被检查页面的主世界，看不到扩展的局部变量，
+// 所以把结果挂到 window.__PI_AGENT__ 上同时让 eval 直接返回。
+window.__PI_AGENT__ = agentLocal;
+agentLocal;
 `;
 
 let currentScene = null;
-let selectedRows = new Set();  // 当前在面板选中的节点行集合（支持多选）
-let sortByDepth = false;       // 勾选后按 depth 降序排列（层级高者在上，类似图层面板）
-let groupByType = false;       // 勾选后把扁平列表按 type 分组（纯 UI 便利，非真实树）
+let agent = null;             // 注入是否成功的标记（true/false）。方法调用都走 window.__PI_AGENT__。
+let selectedRows = new Set(); // 当前在面板选中的节点行集合（支持多选）
+let sortByDepth = false;      // 勾选后按 depth 降序排列（层级高者在上，类似图层面板）
+let groupByType = false;      // 勾选后把扁平列表按 type 分组（纯 UI 便利，非真实树）
 
 // 在页面里 eval 一段表达式；回调拿到 (result, exceptionInfo)。
-// cb 可选：fire-and-forget 的调用（如 highlight）就不用传，避免 undefined 当函数调。
+// 失败时把异常详情显示在面板顶部，方便排查（比如页面脚本写错导致整个 VM 都装不上）。
 function evalExpr(expr, cb) {
   chrome.devtools.inspectedWindow.eval(expr, (result, err) => {
     if (err) {
       console.warn("[panel] eval error:", err);
+      const msg = "[panel] eval error: " + (err && err.description ? err.description : JSON.stringify(err));
+      setStatus(msg);
     }
     if (typeof cb === "function") cb(result);
   });
 }
 
+// 把 agent 函数体注入被检查页面。注入流程：
+// 1. eval AGENT_SOURCE（IIFE）→ 返回 agent 对象（Chrome 会序列化一份快照）
+// 2. 同时 IIFE 末尾把同一个对象挂到 window.__PI_AGENT__（让后续 eval 能直接调用，
+//    因为 eval 字符串在被检查页面 VM 执行，看不到扩展的局部变量）
+// 3. 把 eval 返回对象当 ready 标记（listScenes 是否为函数）；不靠它做实际调用。
 function injectAgent(done) {
-  evalExpr(AGENT_CODE, () => done && done());
+  evalExpr(AGENT_SOURCE, (result, err) => {
+    if (err) {
+      setStatus("[panel] agent 注入 SyntaxError：" + (err.description || JSON.stringify(err)));
+      return;
+    }
+    if (result && typeof result === "object") {
+      // Chrome 跨世界 eval 会把返回值序列化；只要 result 是非 null 对象，
+      // 就说明 IIFE 已执行且 window.__PI_AGENT__ 也被挂上了（同一段代码末尾赋值）。
+      agent = result;
+      setStatus(""); // 清掉上一次可能留下的错误提示
+      if (typeof done === "function") done();
+    } else {
+      setStatus(
+        "agent 注入失败（被检查页面还没准备好或存在其它脚本错误）。" +
+        "请确认：1) 控制台无红色 SyntaxError；2) 游戏入口已挂 window.__GAME__；3) 刷新后重试。"
+      );
+    }
+  });
 }
 
 function setStatus(msg) {
@@ -153,7 +191,9 @@ function renderScenes(scenes) {
   root.innerHTML = "";
   if (!scenes || !scenes.length) {
     // 提示走 status 行，不进 scenes 容器
-    setStatus("未找到 Phaser 游戏（页面需暴露 window.__GAME__ 或 window.__PHASER_GAME__）");
+    // Phaser 4 + ESM 打包且无全局出口时必然走到这里：
+    // 扩展只能访问页面全局，拿不到闭包里的 game 实例，需游戏入口挂 window.__GAME__。
+    setStatus("未找到 Phaser 游戏实例。请在游戏入口把 new Phaser.Game(config) 的返回值挂到 window.__GAME__（Phaser 4 不提供全局实例数组，扩展无法从页面全局取得）。");
     return;
   }
   setStatus(""); // 找到游戏就清掉 status
@@ -314,22 +354,19 @@ function refresh() {
 
 // 重新拉 scenes 列表并重建 #scenes DOM（不刷新 #objects，避免闪烁）
 function refreshScenes() {
-  if (!agentReady) {
+  if (!agent) {
     setStatus("正在注入 agent…");
     return;
   }
   setStatus("");
-  evalExpr(
-    "window.__PI_AGENT__ ? window.__PI_AGENT__.listScenes() : null",
-    (scenes) => renderScenes(scenes)
-  );
+  evalExpr("window.__PI_AGENT__.listScenes()", (scenes) => renderScenes(scenes));
 }
 
 // 轻量轮询：只更新当前选中 scene 的"对象数"行，不重建 DOM，避免每 2 秒全清空闪一下
 function refreshCounts() {
-  if (!agentReady || !currentScene) return;
+  if (!agent || !currentScene) return;
   evalExpr(
-    "window.__PI_AGENT__ ? window.__PI_AGENT__.sceneObjectCount(" + JSON.stringify(currentScene) + ") : null",
+    "window.__PI_AGENT__.sceneObjectCount(" + JSON.stringify(currentScene) + ")",
     (n) => {
       if (typeof n !== "number") return;
       // 找到当前选中 scene 的 div，更新尾部 "— 对象数 N"
@@ -342,8 +379,6 @@ function refreshCounts() {
     }
   );
 }
-
-let agentReady = false;
 
 document.getElementById("refresh").onclick = refreshScenes;
 // 显示/隐藏选中节点：批量 toggle 所有选中行的 visible，回写游戏
@@ -410,7 +445,6 @@ document.getElementById("groupType").onchange = (e) => {
 };
 // 先注入 agent，再启动首次刷新与轮询；避免抢跑返回"未找到"。
 injectAgent(() => {
-  agentReady = true;
   refreshScenes();
   setInterval(refreshCounts, 2000);
 });
