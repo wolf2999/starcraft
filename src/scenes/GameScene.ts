@@ -612,11 +612,20 @@ export class GameScene extends Phaser.Scene {
         e.returnTarget = this.nearestBase(e);
       }
     } else if (e.gatherState === "returning") {
-      const base = e.returnTarget;
+      let base = e.returnTarget;
       if (!base || !base.alive) {
-        base && (e.returnTarget = this.nearestBase(e));
+        // 注意：不能用 base && (...) 短路——base 为 null 时会导致 returnTarget
+        // 永远不被重新寻址，下一行 b.x 直接抛 TypeError，单位卡死
+        base = this.nearestBase(e);
+        e.returnTarget = base;
       }
-      const b = e.returnTarget!;
+      const b = base;
+      if (!b) {
+        // 找不到己方基地（异常情况）：清掉采集状态转待机，避免每帧抛错
+        e.gatherTarget = null;
+        e.gatherState = "idle";
+        return;
+      }
       const d = Phaser.Math.Distance.Between(e.x, e.y, b.x, b.y);
       if (d <= b.r + e.r + 0.3) {
         if (res.def.id === "mineral") this.minerals += e.carrying;
@@ -634,7 +643,7 @@ export class GameScene extends Phaser.Scene {
     let bestD = Infinity;
     for (const o of this.entities) {
       if (!o.alive || o.owner !== e.owner) continue;
-      if (o.def.canProduceLarva || o.def.id === "commandCenter" || o.def.id === "nexus") {
+      if (o.def.canProduceLarva || o.def.id === "cc" || o.def.id === "nexus") {
         const d = Phaser.Math.Distance.Between(e.x, e.y, o.x, o.y);
         if (d < bestD) {
           bestD = d;
