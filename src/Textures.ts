@@ -10,6 +10,16 @@ import {
 import type { Def } from "./config";
 import { TILE_W, TILE_H } from "./iso";
 
+/**
+ * 删除旧纹理（重建前的清理）。
+ * Phaser 的 textures.remove(key) 内部会先 get(key)，对不存在的 key 会打
+ * "No texture found matching key" 警告——首次生成时所有 key 都不存在，
+ * 因此必须先 exists() 判断，否则控制台被无害警告刷屏。
+ */
+function removeTex(scene: Phaser.Scene, key: string) {
+  if (scene.textures.exists(key)) scene.textures.remove(key);
+}
+
 /** 程序化生成所有贴图，避免依赖外部美术资源。等距风格：地面为 2:1 菱形 tile。 */
 export function generateAll(scene: Phaser.Scene) {
   makeTile(scene);
@@ -17,7 +27,7 @@ export function generateAll(scene: Phaser.Scene) {
   makeVespene(scene);
   makeLarva(scene);
 
-  scene.textures.remove("rect");
+  removeTex(scene, "rect");
   const rect = scene.textures.createCanvas("rect", 16, 16);
   if (rect) {
     const c = rect.getContext();
@@ -26,10 +36,10 @@ export function generateAll(scene: Phaser.Scene) {
     rect.refresh();
   }
 
-  scene.textures.remove("drone");
-  scene.textures.remove("creep");
+  removeTex(scene, "drone");
+  removeTex(scene, "creep");
 
-  // 虫族菌毯（菱形）
+  // 虫族菌毯（2:1 菱形，贴等距地面）
   const creep = scene.textures.createCanvas("creep", TILE_W, TILE_H);
   if (creep) {
     const cc = creep.getContext();
@@ -84,7 +94,7 @@ export function generateAll(scene: Phaser.Scene) {
 
 /** 菱形地面 tile（2:1 等距）。 */
 function makeTile(scene: Phaser.Scene) {
-  scene.textures.remove("tile_ground");
+  removeTex(scene, "tile_ground");
   const size = TILE_W;
   const h = TILE_H;
   const tex = scene.textures.createCanvas("tile_ground", size, h);
@@ -105,7 +115,7 @@ function makeTile(scene: Phaser.Scene) {
 }
 
 function makeMineral(scene: Phaser.Scene) {
-  scene.textures.remove("mineral");
+  removeTex(scene, "mineral");
   const tex = scene.textures.createCanvas("mineral", 36, 40);
   if (!tex) return;
   const c = tex.getContext();
@@ -140,7 +150,7 @@ function makeMineral(scene: Phaser.Scene) {
 }
 
 function makeVespene(scene: Phaser.Scene) {
-  scene.textures.remove("vespene");
+  removeTex(scene, "vespene");
   const tex = scene.textures.createCanvas("vespene", 40, 40);
   if (!tex) return;
   const c = tex.getContext();
@@ -167,7 +177,7 @@ function makeVespene(scene: Phaser.Scene) {
 }
 
 function makeLarva(scene: Phaser.Scene) {
-  scene.textures.remove("larva");
+  removeTex(scene, "larva");
   const tex = scene.textures.createCanvas("larva", 14, 10);
   if (!tex) return;
   const c = tex.getContext();
@@ -185,7 +195,7 @@ function makeLarva(scene: Phaser.Scene) {
 }
 
 function makeShotDot(scene: Phaser.Scene, key: string, color: string) {
-  scene.textures.remove(key);
+  removeTex(scene, key);
   const tex = scene.textures.createCanvas(key, 8, 8);
   if (!tex) return;
   const c = tex.getContext();
@@ -197,7 +207,7 @@ function makeShotDot(scene: Phaser.Scene, key: string, color: string) {
 }
 
 function makeGlow(scene: Phaser.Scene, key: string, color: string) {
-  scene.textures.remove(key);
+  removeTex(scene, key);
   const tex = scene.textures.createCanvas(key, 32, 32);
   if (!tex) return;
   const c = tex.getContext();
@@ -209,18 +219,18 @@ function makeGlow(scene: Phaser.Scene, key: string, color: string) {
   tex.refresh();
 }
 
-/* ============ 人族：硬朗金属、直角箱体 + 等距脚底阴影 ============ */
+/* ============ 人族：硬朗金属、直角箱体 + 脚底阴影 ============ */
 
 function terranBuilding(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
   const texKey = d.tex ?? d.id;
-  scene.textures.remove(texKey);
+  removeTex(scene, texKey);
   const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
   c.clearRect(0, 0, w, h);
-  // 脚底阴影（贴合等距脚底）
+  // 脚底阴影
   c.fillStyle = "rgba(0,0,0,0.28)";
   c.beginPath();
   c.ellipse(w / 2, h - 6, w / 2.4, h / 7, 0, 0, Math.PI * 2);
@@ -254,7 +264,7 @@ function terranUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
   const texKey = d.tex ?? d.id;
-  scene.textures.remove(texKey);
+  removeTex(scene, texKey);
   const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
@@ -288,7 +298,7 @@ function terranUnit(scene: Phaser.Scene, d: Def) {
 function protossBuilding(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  scene.textures.remove(d.id);
+  removeTex(scene, d.id);
   const tex = scene.textures.createCanvas(d.id, w, h);
   if (!tex) return;
   const c = tex.getContext();
@@ -328,7 +338,7 @@ function protossUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
   const texKey = d.tex ?? d.id;
-  scene.textures.remove(texKey);
+  removeTex(scene, texKey);
   const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
@@ -368,7 +378,7 @@ function zergBuilding(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
   const texKey = d.tex ?? d.id;
-  scene.textures.remove(texKey);
+  removeTex(scene, texKey);
   const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();
@@ -405,7 +415,7 @@ function zergUnit(scene: Phaser.Scene, d: Def) {
   const w = d.w ?? (d.kind === "building" ? 48 : 26);
   const h = d.h ?? (d.kind === "building" ? 48 : 26);
   const texKey = d.tex ?? d.id;
-  scene.textures.remove(texKey);
+  removeTex(scene, texKey);
   const tex = scene.textures.createCanvas(texKey, w, h);
   if (!tex) return;
   const c = tex.getContext();

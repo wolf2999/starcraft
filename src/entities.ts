@@ -18,7 +18,7 @@ export class Entity {
   hpBar: Phaser.GameObjects.Graphics;
   selectionRing: Phaser.GameObjects.Graphics;
   // 每个 Entity 自己的容器：entityLayer → [Container(单位) → sprite/hpBar/ring]。
-  // 容器的 depth = 1000 + x + y（+ 高度修正）负责单位之间的等距排序；
+  // 容器的 depth = 1000 + x + y（等距画家算法）负责单位之间的遮挡关系；
   // 容器内子对象固定在 (0,0)、scale=1，用世界屏幕坐标直接定位，渲染结果不变。
   container: Phaser.GameObjects.Container;
 
@@ -370,7 +370,7 @@ export class Entity {
     const h = heightAt(this.x, this.y);
     const { sx, sy } = worldToScreen(this.x, this.y, h);
     this.sprite.setPosition(sx, sy);
-    // 非建筑：每帧把“单位容器”的 depth 设成等距排序值（越大越靠前/靠上）。
+    // 非建筑：每帧把“单位容器”的 depth 设成等距排序值（x+y 越大越靠前/靠下）。
     // 注意此处改的是 container 的 depth，不再是 sprite 的——sprite 的 depth 只在容器内排序用。
     if (!this.def.isBuilding)
       this.container.setDepth(1000 + this.x + this.y + h * 100);

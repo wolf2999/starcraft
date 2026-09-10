@@ -8,8 +8,9 @@ import { typeAt, heightAt, TerrainType } from "./terrain";
  * - water：不可通行（代价 Infinity）。
  * - high（高地）：可通行但代价更高，鼓励绕行。
  * - low↔high 直接跨越（高度差 > 0.6 级，即跨越悬崖）被禁止，
- *   单位必须借助 ramp，从而在等距地图上自然绕过悬崖 / 水面。
+ *   单位必须借助 ramp，从而在地形网格上自然绕过悬崖 / 水面。
  * - bridge：正常通行（跨水沟的桥）。
+ * - void：虚空（地图有效区/对角带外），不可通行。
  */
 
 // 各地形基础通行代价：越高代表越“难走”，A* 会优先选择低代价路线
@@ -19,6 +20,7 @@ const BASE_COST: Record<TerrainType, number> = {
   ramp: 1.6,
   bridge: 1,
   water: Infinity,
+  void: Infinity,
 };
 
 export interface PathCell {
