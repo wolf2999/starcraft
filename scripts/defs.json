@@ -1,0 +1,551 @@
+﻿{
+  "total": 91,
+  "defs": [
+    {
+      "id": "cc",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_cc"
+    },
+    {
+      "id": "sd",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_sd"
+    },
+    {
+      "id": "rf",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_rf"
+    },
+    {
+      "id": "barracks",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_barracks"
+    },
+    {
+      "id": "academy",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_academy"
+    },
+    {
+      "id": "ebay",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_ebay"
+    },
+    {
+      "id": "factory",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_factory"
+    },
+    {
+      "id": "armory",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_armory"
+    },
+    {
+      "id": "starport",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_starport"
+    },
+    {
+      "id": "scienceFacility",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_sci"
+    },
+    {
+      "id": "bunker",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_bunker"
+    },
+    {
+      "id": "turret",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_turret"
+    },
+    {
+      "id": "comsat",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_comsat"
+    },
+    {
+      "id": "nuclear",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_nuke"
+    },
+    {
+      "id": "techlab",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_techlab"
+    },
+    {
+      "id": "reactor",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_reactor"
+    },
+    {
+      "id": "machineShop",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_machineshop"
+    },
+    {
+      "id": "controlTower",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_controltower"
+    },
+    {
+      "id": "physicsLab",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_physicslab"
+    },
+    {
+      "id": "covertOps",
+      "kind": "building",
+      "race": "terran",
+      "tex": "b_covertops"
+    },
+    {
+      "id": "scv",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_scv"
+    },
+    {
+      "id": "marine",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_marine"
+    },
+    {
+      "id": "firebat",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_firebat"
+    },
+    {
+      "id": "medic",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_medic"
+    },
+    {
+      "id": "ghost",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_ghost"
+    },
+    {
+      "id": "vulture",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_vulture"
+    },
+    {
+      "id": "tank",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_tank"
+    },
+    {
+      "id": "goliath",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_goliath"
+    },
+    {
+      "id": "dropship",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_dropship"
+    },
+    {
+      "id": "wraith",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_wraith"
+    },
+    {
+      "id": "valkyrie",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_valkyrie"
+    },
+    {
+      "id": "scienceVessel",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_sciencevessel"
+    },
+    {
+      "id": "battlecruiser",
+      "kind": "unit",
+      "race": "terran",
+      "tex": "u_battlecruiser"
+    },
+    {
+      "id": "nexus",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_nexus"
+    },
+    {
+      "id": "pylon",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_pylon"
+    },
+    {
+      "id": "assimilator",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_assimilator"
+    },
+    {
+      "id": "gateway",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_gateway"
+    },
+    {
+      "id": "forge",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_forge"
+    },
+    {
+      "id": "cannon",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_cannon"
+    },
+    {
+      "id": "archives",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_archives"
+    },
+    {
+      "id": "robofac",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_robofac"
+    },
+    {
+      "id": "robobay",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_robobay"
+    },
+    {
+      "id": "stargate",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_stargate"
+    },
+    {
+      "id": "fleetbeacon",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_fleetbeacon"
+    },
+    {
+      "id": "arbiterTribunal",
+      "kind": "building",
+      "race": "protoss",
+      "tex": "b_arbiter"
+    },
+    {
+      "id": "probe",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_probe"
+    },
+    {
+      "id": "zealot",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_zealot"
+    },
+    {
+      "id": "dragoon",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_dragoon"
+    },
+    {
+      "id": "ht",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_ht"
+    },
+    {
+      "id": "dt",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_dt"
+    },
+    {
+      "id": "reaver",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_reaver"
+    },
+    {
+      "id": "shuttle",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_shuttle"
+    },
+    {
+      "id": "scout",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_scout"
+    },
+    {
+      "id": "carrier",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_carrier"
+    },
+    {
+      "id": "arbiter",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_arbiter"
+    },
+    {
+      "id": "observer",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_observer"
+    },
+    {
+      "id": "interceptor",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_interceptor"
+    },
+    {
+      "id": "corsair",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_corsair"
+    },
+    {
+      "id": "archon",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_archon"
+    },
+    {
+      "id": "darkarchon",
+      "kind": "unit",
+      "race": "protoss",
+      "tex": "u_darkarchon"
+    },
+    {
+      "id": "hatchery",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_hatchery"
+    },
+    {
+      "id": "lair",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_lair"
+    },
+    {
+      "id": "hive",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_hive"
+    },
+    {
+      "id": "spawningPool",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_spawningpool"
+    },
+    {
+      "id": "extractor",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_extractor"
+    },
+    {
+      "id": "evolutionChamber",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_evolution"
+    },
+    {
+      "id": "creepColony",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_creepcolony"
+    },
+    {
+      "id": "hydraliskDen",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_hydraden"
+    },
+    {
+      "id": "queenNest",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_queennest"
+    },
+    {
+      "id": "spire",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_spire"
+    },
+    {
+      "id": "greaterSpire",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_greaterSpire"
+    },
+    {
+      "id": "ultraliskCavern",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_ultracavern"
+    },
+    {
+      "id": "defilerMound",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_defilermound"
+    },
+    {
+      "id": "nydus",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_nydus"
+    },
+    {
+      "id": "sunken",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_sunken"
+    },
+    {
+      "id": "spore",
+      "kind": "building",
+      "race": "zerg",
+      "tex": "b_spore"
+    },
+    {
+      "id": "drone",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_drone"
+    },
+    {
+      "id": "larva",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_larva"
+    },
+    {
+      "id": "overlord",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_overlord"
+    },
+    {
+      "id": "zergling",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_zergling"
+    },
+    {
+      "id": "hydralisk",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_hydralisk"
+    },
+    {
+      "id": "lurker",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_lurker"
+    },
+    {
+      "id": "queen",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_queen"
+    },
+    {
+      "id": "defiler",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_defiler"
+    },
+    {
+      "id": "mutalisk",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_mutalisk"
+    },
+    {
+      "id": "guardian",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_guardian"
+    },
+    {
+      "id": "devourer",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_devourer"
+    },
+    {
+      "id": "ultralisk",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_ultralisk"
+    },
+    {
+      "id": "scourge",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "u_scourge"
+    },
+    {
+      "id": "mineral",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "mineral"
+    },
+    {
+      "id": "vespene",
+      "kind": "unit",
+      "race": "zerg",
+      "tex": "vespene"
+    }
+  ]
+}

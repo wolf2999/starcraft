@@ -12,18 +12,21 @@ import { typeAt, TerrainType } from "./terrain";
 import { ownerIsAI, Owner } from "./config";
 
 /**
- * 右上角小地图（星际风格）：
+ * 小地图（星际风格，渲染在 Phaser 内、屏幕层固定不随相机滚动）：
  * - 底图：把地图屏幕投影（MAP_W×MAP_H 方形轮廓）等比缩小，逐像素反投影回
  *   格子取地形颜色，一次性画入离屏 canvas 缓存（void 虚空呈深色底）；
- * - 每帧刷新：底图 + 实体点（我方绿 / 敌方红 / 资源黄）+ 相机视野白框；
- * - 点击 / 按住拖动：小地图坐标反算回世界屏幕坐标，相机居中跳转（受
- *   setBounds 约束，不会越出地图）。
+ * - 每帧刷新：底图 + 实体点（我方绿 / 敌方红 / 资源黄）+ 相机视野白框，
+ *   画入 Phaser CanvasTexture 后 refresh() 上传 GPU；
+ * - 点击 / 按住拖动：由 GameScene 统一转接（hit + jumpAt），像素反算回
+ *   世界屏幕坐标后相机居中跳转（受边界钳制，不会越出地图）。
  */
 
 /** 小地图缩放系数：地图屏幕投影宽 2048 → 160px */
 const MM_SCALE = 160 / MAP_W;
 const MM_W = Math.round(MAP_W * MM_SCALE);
 const MM_H = Math.round(MAP_H * MM_SCALE);
+/** 距窗口右/上边缘的留白 */
+const MARGIN = 12;
 
 /** 各地形底图颜色（RGB）；void 虚空 = 近黑底色 */
 const TERRAIN_COLOR: Record<TerrainType, [number, number, number]> = {
@@ -50,59 +53,59 @@ function entityColor(e: MinimapEntity): string {
 }
 
 export class Minimap {
-  private cam: Phaser.Cameras.Scene2D.Camera;
-  private canvas: HTMLCanvasElement;
+  /** 左上角屏幕坐标（RESIZE 时 layout 重排） */
+  x = 0;
+  y = 0;
+  readonly w = MM_W;
+  readonly h = MM_H;
+
+  private canvasTexture: Phaser.Textures.CanvasTexture;
   private ctx: CanvasRenderingContext2D;
   private terrainCanvas: HTMLCanvasElement;
-  private dragging = false;
+  private image: Phaser.GameObjects.Image;
+  private frame: Phaser.GameObjects.Graphics;
 
-  constructor(
-    cam: Phaser.Cameras.Scene2D.Camera,
-    onJump: (sx: number, sy: number) => void
-  ) {
-    this.cam = cam;
-
-    // 容器：index.html 里预置 #minimap；缺失则兜底创建挂到 body
-    let host = document.getElementById("minimap");
-    if (!host) {
-      host = document.createElement("div");
-      host.id = "minimap";
-      document.body.appendChild(host);
-    }
-
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = MM_W;
-    this.canvas.height = MM_H;
-    host.appendChild(this.canvas);
-    this.ctx = this.canvas.getContext("2d")!;
+  constructor(scene: Phaser.Scene, private cam: Phaser.Cameras.Scene2D.Camera) {
+    if (scene.textures.exists("minimap")) scene.textures.remove("minimap");
+    const tex = scene.textures.createCanvas("minimap", MM_W, MM_H);
+    if (!tex) throw new Error("minimap CanvasTexture 创建失败");
+    this.canvasTexture = tex;
+    this.ctx = tex.context;
 
     this.terrainCanvas = document.createElement("canvas");
     this.terrainCanvas.width = MM_W;
     this.terrainCanvas.height = MM_H;
     this.buildTerrain();
 
-    // 点击 / 按住拖动 → 跳转相机（pointer capture 让按住后移出画布也能继续拖）
-    this.canvas.addEventListener("pointerdown", (ev) => {
-      this.dragging = true;
-      this.canvas.setPointerCapture(ev.pointerId);
-      this.jump(ev, onJump);
-    });
-    this.canvas.addEventListener("pointermove", (ev) => {
-      if (this.dragging) this.jump(ev, onJump);
-    });
-    this.canvas.addEventListener("pointerup", () => (this.dragging = false));
-    this.canvas.addEventListener("pointerleave", () => (this.dragging = false));
+    this.image = scene.add
+      .image(0, 0, "minimap")
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(5000);
+    this.frame = scene.add.graphics().setScrollFactor(0).setDepth(5001);
+    this.layout(scene.scale.gameSize.width, scene.scale.gameSize.height);
   }
 
-  /** 小地图像素 → 世界屏幕坐标 → 相机居中 */
-  private jump(
-    ev: PointerEvent,
-    onJump: (sx: number, sy: number) => void
-  ) {
-    const rect = this.canvas.getBoundingClientRect();
-    const mx = ev.clientX - rect.left;
-    const my = ev.clientY - rect.top;
+  /** 屏幕像素是否落在小地图内（GameScene 用于拦截世界输入 + 触发跳转） */
+  hit(px: number, py: number): boolean {
+    return px >= this.x && px < this.x + MM_W && py >= this.y && py < this.y + MM_H;
+  }
+
+  /** 屏幕像素 → 小地图内部像素 → 世界屏幕坐标 → 相机居中 */
+  jumpAt(px: number, py: number, onJump: (sx: number, sy: number) => void): void {
+    const mx = px - this.x;
+    const my = py - this.y;
     onJump(mx / MM_SCALE, my / MM_SCALE);
+  }
+
+  /** 窗口尺寸变化：右上角重排 + 边框重绘（gh 暂未用到：小地图固定贴顶） */
+  layout(gw: number, _gh: number): void {
+    this.x = gw - MM_W - MARGIN;
+    this.y = MARGIN;
+    this.image.setPosition(this.x, this.y);
+    this.frame.clear();
+    this.frame.lineStyle(1, 0x5a7a5a, 0.9);
+    this.frame.strokeRect(this.x - 1.5, this.y - 1.5, MM_W + 3, MM_H + 3);
   }
 
   /** 地形底图：逐像素反投影（与 screenToWorld 同公式）取格子地形颜色 */
@@ -127,7 +130,7 @@ export class Minimap {
     ctx.putImageData(img, 0, 0);
   }
 
-  /** 每帧刷新：底图 + 实体点 + 相机视野框 */
+  /** 每帧刷新：底图 + 实体点 + 相机视野框，画完 refresh 上传 */
   refresh(entities: MinimapEntity[]) {
     const ctx = this.ctx;
     ctx.drawImage(this.terrainCanvas, 0, 0);
@@ -153,5 +156,6 @@ export class Minimap {
       Math.max(1, v.width * MM_SCALE),
       Math.max(1, v.height * MM_SCALE)
     );
+    this.canvasTexture.refresh();
   }
 }

@@ -20,15 +20,16 @@ import {
   TILE_H,
   worldToScreen,
   screenToWorld,
+  minZoom,
   MAP_W,
   MAP_H,
   MAP_LEFT,
   MAP_TOP,
-  minZoom,
 } from "../iso";
+import { heightAt } from "../terrain";
 import { buildTerrainTilemap } from "../tilemap";
 import { getLostTemple } from "../maps/lostTemple";
-import { Minimap } from "../minimap";
+import { initLiquidUI, type LiquidUI } from "../ui/liquidHud";
 
 export class GameScene extends Phaser.Scene {
   entities: Entity[] = [];
@@ -62,11 +63,10 @@ export class GameScene extends Phaser.Scene {
   larvaTimers: { ent: Entity; t: number }[] = [];
   cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
 
-  /** HUD DOM 节点（跟相机/画布解耦，钉在浏览器视口底部一长条） */
-  hudEl: HTMLElement | null = null;
-
-  /** 右上角小地图（点击/拖动跳转相机） */
-  minimap?: Minimap;
+  /** Liquid UI 层（底部指挥条 + 右上角小地图），皮肤异步加载完成后就绪 */
+  liquidUI?: LiquidUI;
+  /** 小地图按住拖动中（pointerdown 命中小地图后置位） */
+  mapDragging = false;
 
   constructor() {
     super("game");
@@ -160,11 +160,15 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.setZoom(Math.max(1, minZoom(w, h)));
         this.cameras.main.setSize(w, h);
         this.clampCamScroll();
+        this.liquidUI?.layout(w, h);
       });
 
-      // 右上角小地图：点击 / 按住拖动 → 相机跳转到对应位置
-      this.minimap = new Minimap(cam, (sx, sy) => this.centerCamOn(sx, sy));
-
+      // Liquid UI（底部指挥条 + 右上角小地图，Phaser 屏幕层渲染，替代 DOM HUD）。
+      // 皮肤 png 异步加载：就绪前 updateHud/setStats 调用走空，就绪后立即补一次。
+      void initLiquidUI(this).then((ui) => {
+        this.liquidUI = ui;
+        this.updateHud();
+      });
 
       this.input.on("pointerdown", (p: Phaser.Input.Pointer) => this.onPointerDown(p));
       this.input.on("pointerup", (p: Phaser.Input.Pointer) => this.onPointerUp(p));
@@ -176,10 +180,6 @@ export class GameScene extends Phaser.Scene {
         this.attackMoveMode = false;
         this.clearSelection();
       });
-
-      // HUD：DOM 渲染，跟相机/画布解耦，永远钉在浏览器视口左上角
-      this.hudEl = document.getElementById("hud");
-      this.updateHud();
     } catch (e: any) {
       const errText = this.add
         .text(12, 80, "ERROR: " + (e?.message || String(e)), {
@@ -331,6 +331,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   onPointerDown(p: Phaser.Input.Pointer) {
+    // UI 层命中（底部指挥条 / 小地图）：拦截世界输入。
+    // 小地图命中 → 进入按住拖动跳转模式（星际行为），不触发框选/指令。
+    if (this.liquidUI) {
+      if (this.liquidUI.minimap.hit(p.x, p.y)) {
+        this.mapDragging = true;
+        this.liquidUI.minimap.jumpAt(p.x, p.y, (sx, sy) => this.centerCamOn(sx, sy));
+        return;
+      }
+      if (this.liquidUI.hitUI(p.x, p.y)) return;
+    }
+
     // 中键拖动地图：优先于框选/指令，避免误触发左键框选。
     // 拖动范围由 cam.setBounds（贴地形包围盒，出血位 0）自动夹紧。
     if (p.middleButtonDown()) {
@@ -365,6 +376,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   onPointerMove(p: Phaser.Input.Pointer) {
+    // 小地图按住拖动：持续跳转相机（星际行为——按住小地图边缘可连续平移视野）
+    if (this.mapDragging) {
+      if (p.leftButtonReleased()) return; // 松开在 onPointerUp 统一收尾
+      this.liquidUI?.minimap.jumpAt(p.x, p.y, (sx, sy) => this.centerCamOn(sx, sy));
+      return;
+    }
     // 中键拖动中：按位移差反向平移相机（除以 zoom 把画布像素换算回世界像素）
     if (this.cameraDragging) {
       const cam = this.cameras.main;
@@ -394,6 +411,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   onPointerUp(p: Phaser.Input.Pointer) {
+    // 小地图拖动结束：吞掉本次抬起，不触发框选/点选判定
+    if (this.mapDragging) {
+      this.mapDragging = false;
+      return;
+    }
+    // 抬起在 UI 区域（指挥条）：吞掉，避免误触发清空选区/移动指令
+    if (this.liquidUI?.hitUI(p.x, p.y)) return;
     // 中键拖动结束：吞掉本次抬起，不触发框选/点选判定
     if (this.cameraDragging) {
       this.cameraDragging = false;
@@ -409,15 +433,21 @@ export class GameScene extends Phaser.Scene {
     const wh = Math.abs(p.worldY - this.selStartPx.y);
 
     if (ww < 8 && wh < 8) {
-      // 点选：在游戏世界坐标下按半径判定（高地单位同样精准）
+      // 点选：屏幕空间判定——实体中心（含地形高度）投回屏幕，与点击点比像素距离。
+      // 判定半径 = 精灵实际半宽 + 8px 手抖容差，贴精灵本体。
+      // 历史教训两版：① e.r(像素) 被当格用 → 判定圈 ≈7.9 格(屏幕 ~500px)，
+      // 点哪都选中最近单位；② 改 e.r/TILE_W+0.2 后只有 ~14px 斜菱形，且精灵
+      // 锚点 origin(0.5,0.72) 使本体偏向中心上方——点 SCV 下缘常选不中，
+      // selection 为空，右键矿/气泉看似"没反应"（实际是选中那步就失败了）。
       let best: Entity | null = null;
       let bestD = Infinity;
       for (const e of this.entities) {
         if (!e.alive || e.owner !== "player" || e.def.isNeutral) continue;
-        const d = Phaser.Math.Distance.Between(w.wx, w.wy, e.x, e.y);
-        const rr = (e.r ?? 0.5) + 0.9; // 世界单位（格）半径
-        if (d < rr && d < bestD) {
-          bestD = d;
+        const es = worldToScreen(e.x, e.y, heightAt(e.x, e.y));
+        const dpx = Phaser.Math.Distance.Between(p.worldX, p.worldY, es.sx, es.sy);
+        const rr = e.sprite.displayWidth / 2 + 8;
+        if (dpx < rr && dpx < bestD) {
+          bestD = dpx;
           best = e;
         }
       }
@@ -570,7 +600,7 @@ export class GameScene extends Phaser.Scene {
     if (this.entities.length !== before) this.updateSupply();
 
     this.updateHud();
-    this.minimap?.refresh(this.entities);
+    this.liquidUI?.minimap.refresh(this.entities);
 
     // 方向键平移相机（32×32 地图较大，便于巡视）
     const cam = this.cameras.main;
@@ -593,7 +623,10 @@ export class GameScene extends Phaser.Scene {
     }
     if (e.gatherState === "toResource") {
       const d = Phaser.Math.Distance.Between(e.x, e.y, res.x, res.y);
-      if (d <= res.r + e.r + 0.2) {
+      // r 是像素半径（def.size/2），必须 /TILE_W 换算成格再比较——
+      // 之前直接相加（矿 18 + 单位 8 = 26"格"≈ 屏幕 1600px），SCV 站在
+      // 几格外就判"已到达"原地隔空采矿，看起来完全没反应。
+      if (d <= res.r / TILE_W + e.r / TILE_W + 0.25) {
         e.gatherState = "mining";
         e.mineTimer = 1.5;
       } else {
@@ -627,10 +660,12 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const d = Phaser.Math.Distance.Between(e.x, e.y, b.x, b.y);
-      if (d <= b.r + e.r + 0.3) {
+      // 到达基地阈值同上：r 像素 → 格换算
+      if (d <= b.r / TILE_W + e.r / TILE_W + 0.3) {
         if (res.def.id === "mineral") this.minerals += e.carrying;
         else this.vespene += e.carrying;
         e.carrying = 0;
+        this.updateHud(); // 入账后立即刷新 HUD——之前从不刷新，资源数字恒旧，看似"没反应"
         e.gatherState = "toResource";
       } else {
         e.stepMove(dt, b.x, b.y);
@@ -724,16 +759,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   updateHud() {
-    if (!this.hudEl) return;
+    if (!this.liquidUI) return;
     const n = this.entities.filter((e) => e.owner === "player" && !e.def.isNeutral).length;
-    // 底部一长条：资源/人口/选中信息横排，操作提示靠右
-    this.hudEl.innerHTML =
-      `<span>矿物 <b>${this.minerals}</b></span>` +
-      `<span>瓦斯 <b>${this.vespene}</b></span>` +
-      `<span>人口 <b>${this.supplyUsed}/${this.supplyProvided}</b></span>` +
-      `<span>我方单位 <b>${n}</b></span>` +
-      `<span>选中 <b>${this.selection.length}</b></span>` +
-      `<span class="dim">左键框选 · 右键移动/攻击/采集 · 中键拖动地图 · A+左键 攻击移动 · ESC 取消</span>`;
+    this.liquidUI.setStats({
+      minerals: this.minerals,
+      vespene: this.vespene,
+      supplyUsed: this.supplyUsed,
+      supplyProvided: this.supplyProvided,
+      unitCount: n,
+      selCount: this.selection.length,
+      hint: "左键框选 · 右键移动/攻击/采集 · 中键拖动地图 · A+左键 攻击移动 · ESC 取消",
+    });
   }
 }
 

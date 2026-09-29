@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "liquidphaser": "file:../liquidphaser",
     "phaser": "^4.0.0"
   },
   "devDependencies": {
