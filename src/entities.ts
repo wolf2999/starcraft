@@ -63,6 +63,12 @@ export class Entity {
   mineTimer = 0;
   animateTimer = 0;
 
+  // 建造（人族 SCV）：buildTarget 非空 = 正在前往/施工该建筑；
+  // 建筑侧：constructed=false 期间 buildProgress/buildNeed 推进施工
+  buildTarget: Entity | null = null;
+  buildProgress = 0;
+  buildNeed = 0;
+
   constructor(
     scene: Phaser.Scene,
     def: Def,
@@ -160,6 +166,7 @@ export class Entity {
     this.moveTargetX = null;
     this.moveTargetY = null;
     this.gatherTarget = null;
+    this.buildTarget = null;
   }
 
   attackMoveTo(x: number, y: number) {
@@ -169,6 +176,7 @@ export class Entity {
     this.moveTargetY = y;
     this.combatTarget = null;
     this.gatherTarget = null;
+    this.buildTarget = null;
   }
 
   stop() {
@@ -179,6 +187,7 @@ export class Entity {
     this.aggressive = false;
     this.path = [];
     this.pathIndex = 0;
+    this.buildTarget = null;
   }
 
   /** 攻击/索敌/移动每帧推进（工作在“世界格坐标”下，无需等距） */

@@ -109,6 +109,8 @@ export interface Def {
   attackInterval?: number;
   /** 单位：移动速度（像素/秒） */
   speed?: number;
+  /** 单位：可建造的建筑 id 列表（SCV/probe/drone 等建造者） */
+  builds?: string[];
   /** 单位：是否空中（影响目标选择） */
   air?: boolean;
   /** 建筑：是否提供人口上限 */
@@ -244,35 +246,64 @@ export const BUILDINGS: Def[] = [
 /** ——— 人族兵种 ——— */
 export const UNITS: Def[] = [
   // 农民
-  { id: "scv", name: "SCV", kind: "unit", race: "terran", tex: "u_scv", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
-    hp: 60, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90, desc: "农民，采集与建造" },
+  {
+    id: "scv", name: "SCV", kind: "unit", race: "terran", tex: "u_scv", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
+    hp: 60, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90,
+    // 可建造的主体建筑（附属建筑 comsat/techlab 等走挂接体系，暂不开放）
+    builds: ["cc", "sd", "rf", "barracks", "academy", "ebay", "factory", "armory", "starport", "scienceFacility", "bunker", "turret"],
+    desc: "农民，采集与建造"
+  },
   // 地面步兵
-  { id: "marine", name: "机枪兵", kind: "unit", race: "terran", tex: "u_marine", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
-    hp: 40, groundDamage: 6, airDamage: 6, attackType: "both", range: 110, attackInterval: 600, speed: 90, desc: "基础步兵" },
-  { id: "firebat", name: "喷火兵", kind: "unit", race: "terran", tex: "u_firebat", minerals: 50, vespene: 25, supply: 1, buildTime: 4000,
-    hp: 50, groundDamage: 16, attackType: "ground", range: 32, attackInterval: 600, speed: 90, desc: "范围近战火焰" },
-  { id: "medic", name: "护士", kind: "unit", race: "terran", tex: "u_medic", minerals: 50, vespene: 25, supply: 1, buildTime: 4000,
-    hp: 60, range: 100, attackInterval: 1000, speed: 90, desc: "治疗友军" },
-  { id: "ghost", name: "幽灵(鬼兵)", kind: "unit", race: "terran", tex: "u_ghost", minerals: 25, vespene: 75, supply: 1, buildTime: 5000,
-    hp: 45, groundDamage: 10, airDamage: 10, attackType: "both", range: 130, attackInterval: 1000, speed: 95, desc: "隐形、锁定、核打击" },
+  {
+    id: "marine", name: "机枪兵", kind: "unit", race: "terran", tex: "u_marine", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
+    hp: 40, groundDamage: 6, airDamage: 6, attackType: "both", range: 110, attackInterval: 600, speed: 90, desc: "基础步兵"
+  },
+  {
+    id: "firebat", name: "喷火兵", kind: "unit", race: "terran", tex: "u_firebat", minerals: 50, vespene: 25, supply: 1, buildTime: 4000,
+    hp: 50, groundDamage: 16, attackType: "ground", range: 32, attackInterval: 600, speed: 90, desc: "范围近战火焰"
+  },
+  {
+    id: "medic", name: "护士", kind: "unit", race: "terran", tex: "u_medic", minerals: 50, vespene: 25, supply: 1, buildTime: 4000,
+    hp: 60, range: 100, attackInterval: 1000, speed: 90, desc: "治疗友军"
+  },
+  {
+    id: "ghost", name: "幽灵(鬼兵)", kind: "unit", race: "terran", tex: "u_ghost", minerals: 25, vespene: 75, supply: 1, buildTime: 5000,
+    hp: 45, groundDamage: 10, airDamage: 10, attackType: "both", range: 130, attackInterval: 1000, speed: 95, desc: "隐形、锁定、核打击"
+  },
   // 机械地面
-  { id: "vulture", name: "秃鹫战车(雷车)", kind: "unit", race: "terran", tex: "u_vulture", minerals: 75, vespene: 0, supply: 2, buildTime: 4000,
-    hp: 80, groundDamage: 20, attackType: "ground", range: 110, attackInterval: 600, speed: 150, desc: "高速布雷车" },
-  { id: "tank", name: "攻城坦克", kind: "unit", race: "terran", tex: "u_tank", minerals: 150, vespene: 100, supply: 6, buildTime: 6000,
-    hp: 150, groundDamage: 30, attackType: "ground", range: 130, attackInterval: 1100, speed: 70, desc: "可切攻城模式" },
-  { id: "goliath", name: "巨型机器人", kind: "unit", race: "terran", tex: "u_goliath", minerals: 100, vespene: 50, supply: 2, buildTime: 5000,
-    hp: 125, groundDamage: 12, airDamage: 12, attackType: "both", range: 120, attackInterval: 500, speed: 75, air: true, desc: "对空对地双管" },
+  {
+    id: "vulture", name: "秃鹫战车(雷车)", kind: "unit", race: "terran", tex: "u_vulture", minerals: 75, vespene: 0, supply: 2, buildTime: 4000,
+    hp: 80, groundDamage: 20, attackType: "ground", range: 110, attackInterval: 600, speed: 150, desc: "高速布雷车"
+  },
+  {
+    id: "tank", name: "攻城坦克", kind: "unit", race: "terran", tex: "u_tank", minerals: 150, vespene: 100, supply: 6, buildTime: 6000,
+    hp: 150, groundDamage: 30, attackType: "ground", range: 130, attackInterval: 1100, speed: 70, desc: "可切攻城模式"
+  },
+  {
+    id: "goliath", name: "巨型机器人", kind: "unit", race: "terran", tex: "u_goliath", minerals: 100, vespene: 50, supply: 2, buildTime: 5000,
+    hp: 125, groundDamage: 12, airDamage: 12, attackType: "both", range: 120, attackInterval: 500, speed: 75, air: true, desc: "对空对地双管"
+  },
   // 空中
-  { id: "dropship", name: "运输机", kind: "unit", race: "terran", tex: "u_dropship", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
-    hp: 150, speed: 110, air: true, desc: "运输单位" },
-  { id: "wraith", name: "怨灵战机(隐飞)", kind: "unit", race: "terran", tex: "u_wraith", minerals: 150, vespene: 100, supply: 2, buildTime: 6000,
-    hp: 120, groundDamage: 8, airDamage: 8, attackType: "both", range: 120, attackInterval: 600, speed: 130, air: true, desc: "可隐形战机" },
-  { id: "valkyrie", name: "女武神护卫舰", kind: "unit", race: "terran", tex: "u_valkyrie", minerals: 250, vespene: 125, supply: 4, buildTime: 7000,
-    hp: 200, airDamage: 14, attackType: "air", range: 130, attackInterval: 500, speed: 110, air: true, desc: "对空齐射" },
-  { id: "scienceVessel", name: "科学球(科技球)", kind: "unit", race: "terran", tex: "u_sciencevessel", minerals: 100, vespene: 225, supply: 2, buildTime: 8000,
-    hp: 200, speed: 110, air: true, desc: "反隐形/防御场" },
-  { id: "battlecruiser", name: "战列巡洋舰(大和)", kind: "unit", race: "terran", tex: "u_battlecruiser", minerals: 400, vespene: 300, supply: 8, buildTime: 12000,
-    hp: 500, groundDamage: 25, airDamage: 25, attackType: "both", range: 150, attackInterval: 1000, speed: 70, air: true, desc: "大和炮主力舰" }
+  {
+    id: "dropship", name: "运输机", kind: "unit", race: "terran", tex: "u_dropship", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
+    hp: 150, speed: 110, air: true, desc: "运输单位"
+  },
+  {
+    id: "wraith", name: "怨灵战机(隐飞)", kind: "unit", race: "terran", tex: "u_wraith", minerals: 150, vespene: 100, supply: 2, buildTime: 6000,
+    hp: 120, groundDamage: 8, airDamage: 8, attackType: "both", range: 120, attackInterval: 600, speed: 130, air: true, desc: "可隐形战机"
+  },
+  {
+    id: "valkyrie", name: "女武神护卫舰", kind: "unit", race: "terran", tex: "u_valkyrie", minerals: 250, vespene: 125, supply: 4, buildTime: 7000,
+    hp: 200, airDamage: 14, attackType: "air", range: 130, attackInterval: 500, speed: 110, air: true, desc: "对空齐射"
+  },
+  {
+    id: "scienceVessel", name: "科学球(科技球)", kind: "unit", race: "terran", tex: "u_sciencevessel", minerals: 100, vespene: 225, supply: 2, buildTime: 8000,
+    hp: 200, speed: 110, air: true, desc: "反隐形/防御场"
+  },
+  {
+    id: "battlecruiser", name: "战列巡洋舰(大和)", kind: "unit", race: "terran", tex: "u_battlecruiser", minerals: 400, vespene: 300, supply: 8, buildTime: 12000,
+    hp: 500, groundDamage: 25, airDamage: 25, attackType: "both", range: 150, attackInterval: 1000, speed: 70, air: true, desc: "大和炮主力舰"
+  }
 ];
 
 /** ——— 神族建筑 ——— */
@@ -330,36 +361,66 @@ export const PROTOSS_BUILDINGS: Def[] = [
 
 /** ——— 神族兵种 ——— */
 export const PROTOSS_UNITS: Def[] = [
-  { id: "probe", name: "探针", kind: "unit", race: "protoss", tex: "u_probe", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
-    hp: 20, shield: 20, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90, desc: "农民，采集与建造" },
-  { id: "zealot", name: "狂徒(叉子)", kind: "unit", race: "protoss", tex: "u_zealot", minerals: 100, vespene: 0, supply: 2, buildTime: 4000,
-    hp: 100, shield: 60, groundDamage: 8, attackType: "ground", range: 22, attackInterval: 400, speed: 95, desc: "近战狂战士" },
-  { id: "dragoon", name: "龙骑士", kind: "unit", race: "protoss", tex: "u_dragoon", minerals: 125, vespene: 50, supply: 2, buildTime: 5000,
-    hp: 100, shield: 80, groundDamage: 20, airDamage: 20, attackType: "both", range: 120, attackInterval: 600, speed: 70, desc: "对空对地远程" },
-  { id: "ht", name: "高阶圣堂", kind: "unit", race: "protoss", tex: "u_ht", minerals: 50, vespene: 150, supply: 2, buildTime: 6000,
-    hp: 40, shield: 40, groundDamage: 0, attackType: "both", range: 110, attackInterval: 1000, speed: 90, desc: "灵能法师（简化）" },
-  { id: "dt", name: "黑暗圣堂", kind: "unit", race: "protoss", tex: "u_dt", minerals: 125, vespene: 100, supply: 2, buildTime: 6000,
-    hp: 40, shield: 40, groundDamage: 40, attackType: "ground", range: 22, attackInterval: 400, speed: 90, desc: "隐形近战刺客" },
-  { id: "reaver", name: "金甲虫", kind: "unit", race: "protoss", tex: "u_reaver", minerals: 200, vespene: 100, supply: 4, buildTime: 7000,
-    hp: 140, shield: 80, groundDamage: 100, attackType: "ground", range: 160, attackInterval: 2000, speed: 50, desc: "抛射甲虫炮弹" },
-  { id: "shuttle", name: "运输机", kind: "unit", race: "protoss", tex: "u_shuttle", minerals: 200, vespene: 0, supply: 2, buildTime: 5000,
-    hp: 80, shield: 60, speed: 130, air: true, desc: "运输单位" },
-  { id: "scout", name: "侦察机", kind: "unit", race: "protoss", tex: "u_scout", minerals: 300, vespene: 150, supply: 3, buildTime: 6000,
-    hp: 150, shield: 100, groundDamage: 28, airDamage: 28, attackType: "both", range: 140, attackInterval: 500, speed: 130, air: true, desc: "高速拦截机" },
-  { id: "carrier", name: "航母", kind: "unit", race: "protoss", tex: "u_carrier", minerals: 350, vespene: 250, supply: 8, buildTime: 10000,
-    hp: 250, shield: 150, groundDamage: 0, airDamage: 0, attackType: "both", range: 200, attackInterval: 1000, speed: 60, air: true, desc: "携带拦截机的主力舰" },
-  { id: "arbiter", name: "仲裁者", kind: "unit", race: "protoss", tex: "u_arbiter", minerals: 350, vespene: 250, supply: 6, buildTime: 9000,
-    hp: 200, shield: 150, airDamage: 0, attackType: "air", range: 160, attackInterval: 1000, speed: 70, air: true, desc: "时空力场主力舰" },
-  { id: "observer", name: "观察者(叮当)", kind: "unit", race: "protoss", tex: "u_observer", minerals: 25, vespene: 75, supply: 1, buildTime: 4000,
-    hp: 40, shield: 20, speed: 130, air: true, desc: "反隐形侦察（隐形）" },
-  { id: "interceptor", name: "拦截机", kind: "unit", race: "protoss", tex: "u_interceptor", minerals: 0, vespene: 0, supply: 0, buildTime: 1000,
-    hp: 40, shield: 40, groundDamage: 4, airDamage: 4, attackType: "both", range: 100, attackInterval: 500, speed: 120, air: true, desc: "航母小飞机" },
-  { id: "corsair", name: "海盗船", kind: "unit", race: "protoss", tex: "u_corsair", minerals: 150, vespene: 100, supply: 2, buildTime: 5000,
-    hp: 100, shield: 80, airDamage: 8, attackType: "air", range: 140, attackInterval: 400, speed: 150, air: true, desc: "对空拦截（闪电）" },
-  { id: "archon", name: "执政官(白球)", kind: "unit", race: "protoss", tex: "u_archon", minerals: 100, vespene: 300, supply: 4, buildTime: 6000,
-    hp: 10, shield: 350, groundDamage: 30, airDamage: 30, attackType: "both", range: 60, attackInterval: 600, speed: 80, desc: "双圣堂融合，范围溅射" },
-  { id: "darkarchon", name: "黑暗执政官(红球)", kind: "unit", race: "protoss", tex: "u_darkarchon", minerals: 125, vespene: 200, supply: 4, buildTime: 6000,
-    hp: 10, shield: 250, groundDamage: 0, attackType: "both", range: 100, attackInterval: 1000, speed: 80, desc: "双黑暗圣堂融合，精神控制（简化）" }
+  {
+    id: "probe", name: "探针", kind: "unit", race: "protoss", tex: "u_probe", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
+    hp: 20, shield: 20, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90, desc: "农民，采集与建造"
+  },
+  {
+    id: "zealot", name: "狂徒(叉子)", kind: "unit", race: "protoss", tex: "u_zealot", minerals: 100, vespene: 0, supply: 2, buildTime: 4000,
+    hp: 100, shield: 60, groundDamage: 8, attackType: "ground", range: 22, attackInterval: 400, speed: 95, desc: "近战狂战士"
+  },
+  {
+    id: "dragoon", name: "龙骑士", kind: "unit", race: "protoss", tex: "u_dragoon", minerals: 125, vespene: 50, supply: 2, buildTime: 5000,
+    hp: 100, shield: 80, groundDamage: 20, airDamage: 20, attackType: "both", range: 120, attackInterval: 600, speed: 70, desc: "对空对地远程"
+  },
+  {
+    id: "ht", name: "高阶圣堂", kind: "unit", race: "protoss", tex: "u_ht", minerals: 50, vespene: 150, supply: 2, buildTime: 6000,
+    hp: 40, shield: 40, groundDamage: 0, attackType: "both", range: 110, attackInterval: 1000, speed: 90, desc: "灵能法师（简化）"
+  },
+  {
+    id: "dt", name: "黑暗圣堂", kind: "unit", race: "protoss", tex: "u_dt", minerals: 125, vespene: 100, supply: 2, buildTime: 6000,
+    hp: 40, shield: 40, groundDamage: 40, attackType: "ground", range: 22, attackInterval: 400, speed: 90, desc: "隐形近战刺客"
+  },
+  {
+    id: "reaver", name: "金甲虫", kind: "unit", race: "protoss", tex: "u_reaver", minerals: 200, vespene: 100, supply: 4, buildTime: 7000,
+    hp: 140, shield: 80, groundDamage: 100, attackType: "ground", range: 160, attackInterval: 2000, speed: 50, desc: "抛射甲虫炮弹"
+  },
+  {
+    id: "shuttle", name: "运输机", kind: "unit", race: "protoss", tex: "u_shuttle", minerals: 200, vespene: 0, supply: 2, buildTime: 5000,
+    hp: 80, shield: 60, speed: 130, air: true, desc: "运输单位"
+  },
+  {
+    id: "scout", name: "侦察机", kind: "unit", race: "protoss", tex: "u_scout", minerals: 300, vespene: 150, supply: 3, buildTime: 6000,
+    hp: 150, shield: 100, groundDamage: 28, airDamage: 28, attackType: "both", range: 140, attackInterval: 500, speed: 130, air: true, desc: "高速拦截机"
+  },
+  {
+    id: "carrier", name: "航母", kind: "unit", race: "protoss", tex: "u_carrier", minerals: 350, vespene: 250, supply: 8, buildTime: 10000,
+    hp: 250, shield: 150, groundDamage: 0, airDamage: 0, attackType: "both", range: 200, attackInterval: 1000, speed: 60, air: true, desc: "携带拦截机的主力舰"
+  },
+  {
+    id: "arbiter", name: "仲裁者", kind: "unit", race: "protoss", tex: "u_arbiter", minerals: 350, vespene: 250, supply: 6, buildTime: 9000,
+    hp: 200, shield: 150, airDamage: 0, attackType: "air", range: 160, attackInterval: 1000, speed: 70, air: true, desc: "时空力场主力舰"
+  },
+  {
+    id: "observer", name: "观察者(叮当)", kind: "unit", race: "protoss", tex: "u_observer", minerals: 25, vespene: 75, supply: 1, buildTime: 4000,
+    hp: 40, shield: 20, speed: 130, air: true, desc: "反隐形侦察（隐形）"
+  },
+  {
+    id: "interceptor", name: "拦截机", kind: "unit", race: "protoss", tex: "u_interceptor", minerals: 0, vespene: 0, supply: 0, buildTime: 1000,
+    hp: 40, shield: 40, groundDamage: 4, airDamage: 4, attackType: "both", range: 100, attackInterval: 500, speed: 120, air: true, desc: "航母小飞机"
+  },
+  {
+    id: "corsair", name: "海盗船", kind: "unit", race: "protoss", tex: "u_corsair", minerals: 150, vespene: 100, supply: 2, buildTime: 5000,
+    hp: 100, shield: 80, airDamage: 8, attackType: "air", range: 140, attackInterval: 400, speed: 150, air: true, desc: "对空拦截（闪电）"
+  },
+  {
+    id: "archon", name: "执政官(白球)", kind: "unit", race: "protoss", tex: "u_archon", minerals: 100, vespene: 300, supply: 4, buildTime: 6000,
+    hp: 10, shield: 350, groundDamage: 30, airDamage: 30, attackType: "both", range: 60, attackInterval: 600, speed: 80, desc: "双圣堂融合，范围溅射"
+  },
+  {
+    id: "darkarchon", name: "黑暗执政官(红球)", kind: "unit", race: "protoss", tex: "u_darkarchon", minerals: 125, vespene: 200, supply: 4, buildTime: 6000,
+    hp: 10, shield: 250, groundDamage: 0, attackType: "both", range: 100, attackInterval: 1000, speed: 80, desc: "双黑暗圣堂融合，精神控制（简化）"
+  }
 ];
 
 /** ——— 虫族建筑 ——— */
@@ -436,32 +497,58 @@ export const ZERG_BUILDINGS: Def[] = [
 
 /** ——— 虫族兵种 ——— */
 export const ZERG_UNITS: Def[] = [
-  { id: "drone", name: "工蜂", kind: "unit", race: "zerg", tex: "u_drone", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
-    hp: 40, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90, desc: "农民，采集成建筑" },
-  { id: "larva", name: "幼虫", kind: "unit", race: "zerg", tex: "u_larva", minerals: 0, vespene: 0, supply: 0, buildTime: 0,
-    hp: 25, speed: 0, desc: "孵化一切兵种的基础" },
-  { id: "overlord", name: "领主", kind: "unit", race: "zerg", tex: "u_overlord", minerals: 100, vespene: 0, supply: 0, buildTime: 4000,
-    hp: 200, speed: 80, air: true, supplyProvided: 8, desc: "房子，人口" },
-  { id: "zergling", name: "小狗", kind: "unit", race: "zerg", tex: "u_zergling", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
-    hp: 35, groundDamage: 5, attackType: "ground", range: 20, attackInterval: 500, speed: 110, desc: "快速近战虫" },
-  { id: "hydralisk", name: "刺蛇", kind: "unit", race: "zerg", tex: "u_hydralisk", minerals: 75, vespene: 25, supply: 2, buildTime: 4000,
-    hp: 80, groundDamage: 10, airDamage: 10, attackType: "both", range: 110, attackInterval: 500, speed: 90, desc: "对空对地远程虫" },
-  { id: "lurker", name: "潜伏者", kind: "unit", race: "zerg", tex: "u_lurker", minerals: 125, vespene: 100, supply: 3, buildTime: 5000,
-    hp: 120, groundDamage: 20, attackType: "ground", range: 130, attackInterval: 600, speed: 60, desc: "隐形对地刺蛇" },
-  { id: "queen", name: "皇后", kind: "unit", race: "zerg", tex: "u_queen", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
-    hp: 120, groundDamage: 10, airDamage: 10, attackType: "both", range: 120, attackInterval: 600, speed: 90, air: true, desc: "虫族法术单位" },
-  { id: "defiler", name: "蝎子", kind: "unit", race: "zerg", tex: "u_defiler", minerals: 150, vespene: 150, supply: 3, buildTime: 6000,
-    hp: 150, groundDamage: 0, attackType: "both", range: 100, attackInterval: 1000, speed: 70, air: true, desc: "施法者（简化）" },
-  { id: "mutalisk", name: "飞龙", kind: "unit", race: "zerg", tex: "u_mutalisk", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
-    hp: 120, groundDamage: 9, airDamage: 9, attackType: "both", range: 110, attackInterval: 500, speed: 130, air: true, desc: "弹射攻击飞龙" },
-  { id: "guardian", name: "守护者", kind: "unit", race: "zerg", tex: "u_guardian", minerals: 150, vespene: 150, supply: 4, buildTime: 6000,
-    hp: 150, groundDamage: 20, attackType: "ground", range: 150, attackInterval: 600, speed: 80, air: true, desc: "对地大龙" },
-  { id: "devourer", name: "吞噬者", kind: "unit", race: "zerg", tex: "u_devourer", minerals: 150, vespene: 150, supply: 4, buildTime: 6000,
-    hp: 150, airDamage: 25, attackType: "air", range: 150, attackInterval: 600, speed: 80, air: true, desc: "对空大龙" },
-  { id: "ultralisk", name: "猛犸(雷兽)", kind: "unit", race: "zerg", tex: "u_ultralisk", minerals: 200, vespene: 200, supply: 6, buildTime: 7000,
-    hp: 400, groundDamage: 20, attackType: "ground", range: 30, attackInterval: 500, speed: 70, desc: "重型近战巨兽" },
-  { id: "scourge", name: "自杀蚊(自爆)", kind: "unit", race: "zerg", tex: "u_scourge", minerals: 25, vespene: 75, supply: 1, buildTime: 3000,
-    hp: 25, airDamage: 110, attackType: "air", range: 20, attackInterval: 1000, speed: 150, air: true, desc: "对空自爆飞机（高爆伤）" }
+  {
+    id: "drone", name: "工蜂", kind: "unit", race: "zerg", tex: "u_drone", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
+    hp: 40, groundDamage: 5, attackType: "ground", range: 18, attackInterval: 1000, speed: 90, desc: "农民，采集成建筑"
+  },
+  {
+    id: "larva", name: "幼虫", kind: "unit", race: "zerg", tex: "u_larva", minerals: 0, vespene: 0, supply: 0, buildTime: 0,
+    hp: 25, speed: 0, desc: "孵化一切兵种的基础"
+  },
+  {
+    id: "overlord", name: "领主", kind: "unit", race: "zerg", tex: "u_overlord", minerals: 100, vespene: 0, supply: 0, buildTime: 4000,
+    hp: 200, speed: 80, air: true, supplyProvided: 8, desc: "房子，人口"
+  },
+  {
+    id: "zergling", name: "小狗", kind: "unit", race: "zerg", tex: "u_zergling", minerals: 50, vespene: 0, supply: 1, buildTime: 4000,
+    hp: 35, groundDamage: 5, attackType: "ground", range: 20, attackInterval: 500, speed: 110, desc: "快速近战虫"
+  },
+  {
+    id: "hydralisk", name: "刺蛇", kind: "unit", race: "zerg", tex: "u_hydralisk", minerals: 75, vespene: 25, supply: 2, buildTime: 4000,
+    hp: 80, groundDamage: 10, airDamage: 10, attackType: "both", range: 110, attackInterval: 500, speed: 90, desc: "对空对地远程虫"
+  },
+  {
+    id: "lurker", name: "潜伏者", kind: "unit", race: "zerg", tex: "u_lurker", minerals: 125, vespene: 100, supply: 3, buildTime: 5000,
+    hp: 120, groundDamage: 20, attackType: "ground", range: 130, attackInterval: 600, speed: 60, desc: "隐形对地刺蛇"
+  },
+  {
+    id: "queen", name: "皇后", kind: "unit", race: "zerg", tex: "u_queen", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
+    hp: 120, groundDamage: 10, airDamage: 10, attackType: "both", range: 120, attackInterval: 600, speed: 90, air: true, desc: "虫族法术单位"
+  },
+  {
+    id: "defiler", name: "蝎子", kind: "unit", race: "zerg", tex: "u_defiler", minerals: 150, vespene: 150, supply: 3, buildTime: 6000,
+    hp: 150, groundDamage: 0, attackType: "both", range: 100, attackInterval: 1000, speed: 70, air: true, desc: "施法者（简化）"
+  },
+  {
+    id: "mutalisk", name: "飞龙", kind: "unit", race: "zerg", tex: "u_mutalisk", minerals: 100, vespene: 100, supply: 2, buildTime: 5000,
+    hp: 120, groundDamage: 9, airDamage: 9, attackType: "both", range: 110, attackInterval: 500, speed: 130, air: true, desc: "弹射攻击飞龙"
+  },
+  {
+    id: "guardian", name: "守护者", kind: "unit", race: "zerg", tex: "u_guardian", minerals: 150, vespene: 150, supply: 4, buildTime: 6000,
+    hp: 150, groundDamage: 20, attackType: "ground", range: 150, attackInterval: 600, speed: 80, air: true, desc: "对地大龙"
+  },
+  {
+    id: "devourer", name: "吞噬者", kind: "unit", race: "zerg", tex: "u_devourer", minerals: 150, vespene: 150, supply: 4, buildTime: 6000,
+    hp: 150, airDamage: 25, attackType: "air", range: 150, attackInterval: 600, speed: 80, air: true, desc: "对空大龙"
+  },
+  {
+    id: "ultralisk", name: "猛犸(雷兽)", kind: "unit", race: "zerg", tex: "u_ultralisk", minerals: 200, vespene: 200, supply: 6, buildTime: 7000,
+    hp: 400, groundDamage: 20, attackType: "ground", range: 30, attackInterval: 500, speed: 70, desc: "重型近战巨兽"
+  },
+  {
+    id: "scourge", name: "自杀蚊(自爆)", kind: "unit", race: "zerg", tex: "u_scourge", minerals: 25, vespene: 75, supply: 1, buildTime: 3000,
+    hp: 25, airDamage: 110, attackType: "air", range: 20, attackInterval: 1000, speed: 150, air: true, desc: "对空自爆飞机（高爆伤）"
+  }
 ];
 
 /** 中立资源节点定义（不计入战斗单位） */

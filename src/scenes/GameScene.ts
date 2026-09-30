@@ -25,11 +25,16 @@ import {
   MAP_H,
   MAP_LEFT,
   MAP_TOP,
+  MAP_COLS,
+  MAP_ROWS,
 } from "../iso";
-import { heightAt } from "../terrain";
+import { heightAt, typeAt } from "../terrain";
 import { buildTerrainTilemap } from "../tilemap";
 import { getLostTemple } from "../maps/lostTemple";
-import { initLiquidUI, type LiquidUI } from "../ui/liquidHud";
+import { initLiquidUI, HUD_H, type LiquidUI } from "../ui/liquidHud";
+import { LiquidButton } from "liquidphaser/liquid";
+import { MouseEvent as LiquidMouseEvent, TextFormat } from "liquidphaser/fl";
+import type { Def } from "../config";
 
 export class GameScene extends Phaser.Scene {
   entities: Entity[] = [];
@@ -67,6 +72,27 @@ export class GameScene extends Phaser.Scene {
   liquidUI?: LiquidUI;
   /** 小地图按住拖动中（pointerdown 命中小地图后置位） */
   mapDragging = false;
+
+  // —— 建造系统（人族单 SCV 版）——
+  /** 建造面板（B 键开关）：LiquidButton 挂在 Liquid stage 上；rect 拦截面板区域的世界输入 */
+  buildPanel: {
+    buttons: { btn: any; defId: string }[];
+    visible: boolean;
+    rect: { x: number; y: number; w: number; h: number };
+  } | null = null;
+  /** 幽灵放置状态：null = 未在放置模式 */
+  placing: {
+    defId: string;
+    ghost: Phaser.GameObjects.Image;
+    ring: Phaser.GameObjects.Graphics;
+    gx: number;
+    gy: number;
+    valid: boolean;
+  } | null = null;
+  /** 建造面板/幽灵下的资源余额快照（打开面板时刷新按钮可用态用） */
+  panelRefreshTick = 0;
+  /** 临时提示文本（被拒绝操作的可见反馈，自动淡出） */
+  hintText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super("game");
@@ -161,6 +187,8 @@ export class GameScene extends Phaser.Scene {
         this.cameras.main.setSize(w, h);
         this.clampCamScroll();
         this.liquidUI?.layout(w, h);
+        // 面板坐标基于旧窗口尺寸，直接关闭（下次按 B 重建）
+        this.closeBuildPanel();
       });
 
       // Liquid UI（底部指挥条 + 右上角小地图，Phaser 屏幕层渲染，替代 DOM HUD）。
@@ -176,9 +204,14 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.on("keydown-A", () => {
         this.attackMoveMode = true;
       });
+      // B：开关建造面板（需选中有 builds 清单的单位，如 SCV）
+      this.input.keyboard?.on("keydown-B", () => this.toggleBuildPanel());
       this.input.keyboard?.on("keydown-ESC", () => {
         this.attackMoveMode = false;
         this.clearSelection();
+        // ESC 优先退出幽灵放置，其次关闭建造面板
+        if (this.placing) this.exitPlacing();
+        else this.closeBuildPanel();
       });
     } catch (e: any) {
       const errText = this.add
@@ -281,9 +314,14 @@ export class GameScene extends Phaser.Scene {
       if (old) old.alive = false;
     }
 
-    // 供给（升级建筑不重复计数）
-    if (def.supplyProvided && owner !== "neutral" && !def.upgradeOf) {
+    // 供给（升级建筑不重复计数；未完工建筑完工后才计入人口上限）
+    if (def.supplyProvided && owner !== "neutral" && !def.upgradeOf && constructed) {
       this.supplyProvided += def.supplyProvided;
+    }
+    // 施工中表现：半透明地基，起始 10% HP 随施工进度回复到满
+    if (def.isBuilding && !constructed) {
+      e.sprite.setAlpha(0.55);
+      e.hp = Math.max(1, Math.round(e.maxHp * 0.1));
     }
 
     // 虫族幼虫依附
@@ -342,6 +380,21 @@ export class GameScene extends Phaser.Scene {
       if (this.liquidUI.hitUI(p.x, p.y)) return;
     }
 
+    // 建造面板区域：按钮点击由 liquid 桥接处理，这里拦截世界输入避免误框选/误指令
+    if (this.buildPanel?.visible && this.hitBuildPanel(p.x, p.y)) return;
+
+    // 幽灵放置模式：右键取消，左键落子；不进入框选/指令分支
+    if (this.placing) {
+      if (p.rightButtonDown()) {
+        this.exitPlacing();
+        return;
+      }
+      if (p.leftButtonDown()) {
+        this.tryPlaceBuilding();
+        return;
+      }
+    }
+
     // 中键拖动地图：优先于框选/指令，避免误触发左键框选。
     // 拖动范围由 cam.setBounds（贴地形包围盒，出血位 0）自动夹紧。
     if (p.middleButtonDown()) {
@@ -387,6 +440,11 @@ export class GameScene extends Phaser.Scene {
       const cam = this.cameras.main;
       cam.scrollX = this.dragCamScroll.x - (p.x - this.dragStartPx.x) / cam.zoom;
       cam.scrollY = this.dragCamScroll.y - (p.y - this.dragStartPx.y) / cam.zoom;
+      return;
+    }
+    // 幽灵放置：跟随指针（吸附格 + 红绿合法性）
+    if (this.placing) {
+      this.updatePlacingGhost(p.worldX, p.worldY);
       return;
     }
     if (this.attackMoveMode) {
@@ -488,6 +546,27 @@ export class GameScene extends Phaser.Scene {
   commandRightClick(wx: number, wy: number) {
     for (const e of this.selection) {
       if (e.def.isBuilding) continue;
+      // 任何新指令都取消进行中的建造
+      e.buildTarget = null;
+
+      // 未完工的我方建筑：继续施工（点工地）
+      let site: Entity | null = null;
+      let siteD = 1.6;
+      for (const o of this.entities) {
+        if (!o.alive || o.owner !== "player" || !o.def.isBuilding || o.constructed) continue;
+        const d = Phaser.Math.Distance.Between(wx, wy, o.x, o.y);
+        if (d < siteD) {
+          siteD = d;
+          site = o;
+        }
+      }
+      if (site && e.def.builds?.length) {
+        e.buildTarget = site;
+        e.gatherTarget = null;
+        e.gatherState = "idle";
+        e.combatTarget = null;
+        continue;
+      }
 
       // 攻击敌人？
       let target: Entity | null = null;
@@ -537,6 +616,335 @@ export class GameScene extends Phaser.Scene {
     this.selection = [];
   }
 
+  /* ============ 建造系统（人族单 SCV 版） ============ */
+
+  /** 建筑占地（格，正方形）：按贴图宽换算，1 格 = TILE_W px；至少 1 格 */
+  footprintOf(def: Def): number {
+    return Math.max(1, Math.round((def.w ?? TILE_W) / TILE_W));
+  }
+
+  /** 当前是否选中有 builds 清单的可建造单位（SCV） */
+  hasBuilderSelected(): boolean {
+    return this.selection.some((e) => e.alive && e.owner === "player" && e.def.builds?.length);
+  }
+
+  /** B 键：开关建造面板（LiquidButton 挂 Liquid stage，两行 6 列） */
+  toggleBuildPanel() {
+    if (this.buildPanel?.visible) {
+      this.closeBuildPanel();
+      return;
+    }
+    if (!this.hasBuilderSelected() || !this.liquidUI) return;
+    const builder = this.selection.find((e) => e.def.builds?.length)!;
+    const stage = this.liquidUI.stage;
+    const gh = this.scale.gameSize.height;
+    const cols = 6;
+    const bw = 96;
+    const bh = 24;
+    const gapX = 8;
+    const gapY = 6;
+    const rows = Math.ceil(builder.def.builds!.length / cols);
+    const x0 = 16;
+    // 面板在指挥条上方
+    const y0 = gh - HUD_H - rows * (bh + gapY) - 8;
+    const buttons: { btn: any; defId: string }[] = [];
+    try {
+      builder.def.builds!.forEach((defId, i) => {
+        const def = ALL_DEFS[defId];
+        if (!def) return;
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const btn = new LiquidButton();
+        btn.label = `${def.name} ${def.minerals}`;
+        btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, 0xd8ffe6));
+        btn.setSize(bw, bh);
+        btn.position.set(x0 + col * (bw + gapX), y0 + row * (bh + gapY));
+        btn.addEventListener(LiquidMouseEvent.CLICK, () => this.onBuildPick(defId));
+        stage.addChild(btn);
+        buttons.push({ btn, defId });
+      });
+    } catch (err) {
+      console.warn("[buildPanel] 创建失败", err);
+      return;
+    }
+    this.buildPanel = {
+      buttons,
+      visible: true,
+      rect: { x: x0 - 4, y: y0 - 4, w: cols * (bw + gapX), h: rows * (bh + gapY) + 8 },
+    };
+    this.refreshBuildPanel();
+  }
+
+  /** 关面板：从 stage 移除并销毁按钮；若在幽灵放置也一并退出 */
+  closeBuildPanel() {
+    const panel = this.buildPanel;
+    if (!panel) return;
+    const stage = this.liquidUI?.stage;
+    for (const b of panel.buttons) {
+      try {
+        stage?.removeChild(b.btn);
+        b.btn.destroy?.();
+      } catch {
+        /* 组件可能已被销毁 */
+      }
+    }
+    this.buildPanel = null;
+    this.exitPlacing();
+  }
+
+  /** 屏幕坐标是否落在面板矩形内（onPointerDown 拦截世界输入用） */
+  hitBuildPanel(px: number, py: number): boolean {
+    const r = this.buildPanel?.rect;
+    if (!r) return false;
+    return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+  }
+
+  /** 余额变化时刷新按钮可用态（买不起置灰）——updateHud 节流调用 */
+  refreshBuildPanel() {
+    const panel = this.buildPanel;
+    if (!panel) return;
+    for (const b of panel.buttons) {
+      const def = ALL_DEFS[b.defId];
+      if (!def) continue;
+      const ok = this.minerals >= def.minerals && this.vespene >= def.vespene;
+      // 皮肤就绪时 LiquidButton 文字色跟随皮肤（同 LiquidLabel 库级行为），setStyle 置灰可能不可见；
+      // 改标签内容做“买不起”标记（文本内容不会被皮肤覆盖）
+      const base = `${def.name} ${def.minerals}`;
+      b.btn.label = ok ? base : `${base} ×`;
+      b.btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, ok ? 0xd8ffe6 : 0x66766d));
+    }
+  }
+
+  /** 临时提示（左下角红色文字，约 2s 后淡出）：让被拒绝的操作有可见反馈 */
+  showHint(msg: string) {
+    if (this.hintText) {
+      this.tweens.killTweensOf(this.hintText);
+      this.hintText.destroy();
+      this.hintText = null;
+    }
+    const gh = this.scale.gameSize.height;
+    const t = this.add
+      .text(16, gh - HUD_H - 26, msg, {
+        fontFamily: "Consolas, 'Courier New', monospace",
+        fontSize: "13px",
+        color: "#ffb0a0",
+        backgroundColor: "#000000cc",
+      })
+      .setScrollFactor(0)
+      .setDepth(6000);
+    this.hintText = t;
+    this.tweens.add({
+      targets: t,
+      alpha: 0,
+      delay: 1600,
+      duration: 400,
+      onComplete: () => {
+        t.destroy();
+        if (this.hintText === t) this.hintText = null;
+      },
+    });
+  }
+
+  /** 面板按钮点击：买得起才进入幽灵放置 */
+  onBuildPick(defId: string) {
+    const def = ALL_DEFS[defId];
+    if (!def) return;
+    if (this.minerals < def.minerals || this.vespene < def.vespene) {
+      // 此前静默 return → 用户视角“点了没反应”。给出可见反馈（红色提示，自动淡出）
+      const lack =
+        this.minerals < def.minerals
+          ? `矿物不足：需要 ${def.minerals}（现有 ${this.minerals}）`
+          : `瓦斯不足：需要 ${def.vespene}（现有 ${this.vespene}）`;
+      console.log("[build] pick 拒绝", defId, lack);
+      this.showHint(lack);
+      return;
+    }
+    console.log("[build] pick 通过", defId);
+    this.enterPlacing(defId);
+  }
+
+  /** 进入幽灵放置：半透明贴图 + 占地菱形（绿=可放 / 红=不可） */
+  enterPlacing(defId: string) {
+    this.exitPlacing();
+    const def = ALL_DEFS[defId];
+    if (!def) return;
+    const ghost = this.add.image(-100, -100, def.tex).setOrigin(0.5, 0.72).setAlpha(0.55).setDepth(5080);
+    const ring = this.add.graphics().setDepth(5079);
+    this.placing = { defId, ghost, ring, gx: -999, gy: -999, valid: false };
+  }
+
+  exitPlacing() {
+    if (!this.placing) return;
+    this.placing.ghost.destroy();
+    this.placing.ring.destroy();
+    this.placing = null;
+  }
+
+  /** 幽灵跟随指针：吸附到格子（占地左上角）并刷新合法性 */
+  updatePlacingGhost(worldX: number, worldY: number) {
+    const pl = this.placing;
+    if (!pl) return;
+    const def = ALL_DEFS[pl.defId];
+    if (!def) {
+      this.exitPlacing();
+      return;
+    }
+    const w = screenToWorld(worldX, worldY);
+    const fp = this.footprintOf(def);
+    const gx = Math.round(w.wx - fp / 2);
+    const gy = Math.round(w.wy - fp / 2);
+    pl.gx = gx;
+    pl.gy = gy;
+    pl.valid = this.canPlaceAt(gx, gy, def);
+    // 以占地中心格的地形高度画（跨高差时避免四角参差）
+    const cx = gx + fp / 2;
+    const cy = gy + fp / 2;
+    const h = heightAt(cx, cy);
+    const c = worldToScreen(cx, cy, h);
+    pl.ghost.setPosition(c.sx, c.sy);
+    pl.ghost.setTint(pl.valid ? 0x99ffbb : 0xff6666);
+    const p1 = worldToScreen(gx, gy, h);
+    const p2 = worldToScreen(gx + fp, gy, h);
+    const p3 = worldToScreen(gx + fp, gy + fp, h);
+    const p4 = worldToScreen(gx, gy + fp, h);
+    const ring = pl.ring;
+    ring.clear();
+    ring.lineStyle(2, pl.valid ? 0x66ff99 : 0xff5555, 0.9);
+    ring.fillStyle(pl.valid ? 0x66ff99 : 0xff5555, 0.15);
+    ring.beginPath();
+    ring.moveTo(p1.sx, p1.sy);
+    ring.lineTo(p2.sx, p2.sy);
+    ring.lineTo(p3.sx, p3.sy);
+    ring.lineTo(p4.sx, p4.sy);
+    ring.closePath();
+    ring.fillPath();
+    ring.strokePath();
+  }
+
+  /** 放置合法性：地图范围 / 地形（仅 low/high/bridge）/ 占地高差 ≤0.6 / 实体重叠 / 精炼厂绑气泉 */
+  canPlaceAt(gx: number, gy: number, def: Def): boolean {
+    const fp = this.footprintOf(def);
+    if (gx < 0 || gy < 0 || gx + fp > MAP_COLS || gy + fp > MAP_ROWS) return false;
+    let hMin = Infinity;
+    let hMax = -Infinity;
+    for (let x = gx; x < gx + fp; x++) {
+      for (let y = gy; y < gy + fp; y++) {
+        const t = typeAt(x, y);
+        // low/high 可建；ramp/water/void 禁止（bridge 与地面同级允许）
+        if (t !== "low" && t !== "high" && t !== "bridge") return false;
+        const h = heightAt(x, y);
+        if (h < hMin) hMin = h;
+        if (h > hMax) hMax = h;
+      }
+    }
+    // 不可横跨悬崖
+    if (hMax - hMin > 0.6) return false;
+    // 重叠：任何非空军存活实体的碰撞圈与占地矩形相交即不可放
+    for (const e of this.entities) {
+      if (!e.alive || e.isAir) continue;
+      // 精炼厂：气泉自身重叠交给下方专属校验
+      if (def.requiresVespeneGeyser && e.def.id === "vespene") continue;
+      const er = e.r / TILE_W;
+      if (e.x + er <= gx || e.x - er >= gx + fp || e.y + er <= gy || e.y - er >= gy + fp) continue;
+      return false;
+    }
+    // 精炼厂必须建在未占用气泉上（气泉中心在占地中心附近）
+    if (def.requiresVespeneGeyser) {
+      const cx = gx + fp / 2;
+      const cy = gy + fp / 2;
+      const geyser = this.entities.find(
+        (g) =>
+          g.alive &&
+          g.def.isNeutral &&
+          g.def.id === "vespene" &&
+          Math.abs(g.x - cx) < 0.75 &&
+          Math.abs(g.y - cy) < 0.75
+      );
+      if (!geyser) return false;
+      const occupied = this.entities.some(
+        (b) => b.alive && b.def.requiresVespeneGeyser && Math.hypot(b.x - geyser.x, b.y - geyser.y) < 1.5
+      );
+      if (occupied) return false;
+    }
+    return true;
+  }
+
+  /** 左键落子：合法性已由幽灵保证；扣费 → 建筑入场 → 指派最近 SCV 前往施工 */
+  tryPlaceBuilding() {
+    const pl = this.placing;
+    if (!pl || !pl.valid) return;
+    this.placeBuilding(pl.defId, pl.gx, pl.gy);
+    this.exitPlacing();
+  }
+
+  placeBuilding(defId: string, gx: number, gy: number) {
+    const def = ALL_DEFS[defId];
+    if (!def) return;
+    if (this.minerals < def.minerals || this.vespene < def.vespene) return;
+    // 指派建造者：优先当前选中的，否则最近的可用 SCV
+    const builders = this.entities.filter(
+      (e) => e.alive && !e.def.isBuilding && e.owner === "player" && e.def.builds?.includes(defId)
+    );
+    const sel = builders.find((e) => this.selection.includes(e));
+    const scv =
+      sel ??
+      builders.sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(a.x, a.y, gx, gy) -
+          Phaser.Math.Distance.Between(b.x, b.y, gx, gy)
+      )[0];
+    if (!scv) return;
+    this.minerals -= def.minerals;
+    this.vespene -= def.vespene;
+    const fp = this.footprintOf(def);
+    // 建筑中心落占地中心；constructed=false 进入施工态（半透明 + 10% HP + 不计人口）
+    const b = this.spawnFromDef(gx + fp / 2, gy + fp / 2, defId, "player", false);
+    if (!b || !b.alive) return;
+    scv.stop();
+    scv.gatherTarget = null;
+    scv.gatherState = "idle";
+    scv.buildTarget = b;
+    b.buildProgress = 0;
+    b.buildNeed = def.buildTime;
+    this.updateSupply();
+    this.updateHud();
+  }
+
+  /** SCV 施工状态机：走向工地 → 贴身后推进 buildProgress → 完工结算 */
+  updateBuild(e: Entity, dt: number) {
+    const b = e.buildTarget;
+    if (!b || !b.alive || b.constructed) {
+      e.buildTarget = null;
+      return;
+    }
+    const d = Phaser.Math.Distance.Between(e.x, e.y, b.x, b.y);
+    // 到达阈值按格换算（r 是像素，教训同采集）
+    const reach = b.r / TILE_W + e.r / TILE_W + 0.35;
+    if (d > reach) {
+      e.stepMove(dt, b.x, b.y);
+      return;
+    }
+    // 贴身施工：停下推进进度（多个 SCV 可共建，进度共享）
+    e.path = [];
+    e.moveTargetX = null;
+    e.moveTargetY = null;
+    b.buildProgress += dt * 1000;
+    const frac = Math.min(1, b.buildProgress / Math.max(1, b.buildNeed));
+    b.hp = Math.max(b.hp, Math.round(b.maxHp * (0.1 + 0.9 * frac)));
+    if (b.buildProgress >= b.buildNeed) this.finishBuilding(b, e);
+  }
+
+  /** 完工：恢复不透明 + 满血，人口供给此时才结算 */
+  finishBuilding(b: Entity, worker?: Entity) {
+    b.constructed = true;
+    b.buildProgress = b.buildNeed;
+    b.hp = b.maxHp;
+    b.sprite.setAlpha(1);
+    if (worker) worker.buildTarget = null;
+    this.updateSupply();
+    this.updateHud();
+  }
+
   update(_time: number, delta: number) {
     const dt = delta / 1000;
 
@@ -563,7 +971,11 @@ export class GameScene extends Phaser.Scene {
       if (!e.alive) continue;
       try {
         e.updateCombat(dt);
-        if (!e.def.isBuilding) this.updateGather(e, dt);
+        if (!e.def.isBuilding) {
+          // 施工优先于采集：buildTarget 非空 = 正在建造
+          if (e.buildTarget) this.updateBuild(e, dt);
+          else this.updateGather(e, dt);
+        }
       } catch (err) {
         // 静默兜底，避免抛错让 update 整体崩溃；
         // 把当前目标清掉，让该单位停下而不是反复崩溃。
@@ -694,7 +1106,8 @@ export class GameScene extends Phaser.Scene {
     this.supplyUsed = 0;
     for (const e of this.entities) {
       if (e.owner !== "player") continue;
-      if (e.def.supplyProvided && !e.def.upgradeOf) this.supplyProvided += e.def.supplyProvided;
+      // 未完工建筑不提供人口（完工时 finishBuilding 触发重算）
+      if (e.def.supplyProvided && e.constructed && !e.def.upgradeOf) this.supplyProvided += e.def.supplyProvided;
       if (e.def.supplyCost) this.supplyUsed += e.def.supplyCost;
     }
   }
