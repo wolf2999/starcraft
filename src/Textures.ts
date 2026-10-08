@@ -1,13 +1,4 @@
 import * as Phaser from "phaser";
-import {
-  PROTOSS_UNITS,
-  PROTOSS_BUILDINGS,
-  UNITS as TERRAN_UNITS,
-  BUILDINGS as TERRAN_BUILDINGS,
-  ZERG_UNITS,
-  ZERG_BUILDINGS,
-} from "./config";
-import type { Def } from "./config";
 import { TILE_W, TILE_H } from "./iso";
 
 /**
@@ -20,7 +11,11 @@ function removeTex(scene: Phaser.Scene, key: string) {
   if (scene.textures.exists(key)) scene.textures.remove(key);
 }
 
-/** 程序化生成所有贴图，避免依赖外部美术资源。等距风格：地面为 2:1 菱形 tile。 */
+/**
+ * 程序化生成地面/资源/特效贴图。等距风格：地面为 2:1 菱形 tile。
+ * 种族实体贴图（b_ 与 u_ 前缀）不在此生成——已改由 GameScene.preload 加载
+ * gen-ase.mjs 导出的横条序列帧 spritesheet（动作动画见 src/animDefs.json）。
+ */
 export function generateAll(scene: Phaser.Scene) {
   makeTile(scene);
   makeMineral(scene);
@@ -63,18 +58,6 @@ export function generateAll(scene: Phaser.Scene) {
     dc.fillRect(0, 0, 8, 8);
     drone.refresh();
   }
-
-  // 人族
-  TERRAN_BUILDINGS.forEach((d) => terranBuilding(scene, d));
-  TERRAN_UNITS.forEach((d) => terranUnit(scene, d));
-
-  // 神族
-  PROTOSS_BUILDINGS.forEach((d) => protossBuilding(scene, d));
-  PROTOSS_UNITS.forEach((d) => protossUnit(scene, d));
-
-  // 虫族
-  ZERG_BUILDINGS.forEach((d) => zergBuilding(scene, d));
-  ZERG_UNITS.forEach((d) => zergUnit(scene, d));
 
   // 一些通用特效贴图
   makeShotDot(scene, "shot_red", "#ff5555");
@@ -218,230 +201,3 @@ function makeGlow(scene: Phaser.Scene, key: string, color: string) {
   c.fillRect(0, 0, 32, 32);
   tex.refresh();
 }
-
-/* ============ 人族：硬朗金属、直角箱体 + 脚底阴影 ============ */
-
-function terranBuilding(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  const texKey = d.tex ?? d.id;
-  removeTex(scene, texKey);
-  const tex = scene.textures.createCanvas(texKey, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  // 脚底阴影
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 6, w / 2.4, h / 7, 0, 0, Math.PI * 2);
-  c.fill();
-  // 主体金属箱
-  const bodyTop = h * 0.18;
-  c.fillStyle = "#5a5f66";
-  c.fillRect(w * 0.12, bodyTop, w * 0.76, h * 0.66);
-  // 顶面高光
-  c.fillStyle = "#7d838b";
-  c.fillRect(w * 0.12, bodyTop, w * 0.76, h * 0.1);
-  // 暗部
-  c.fillStyle = "#3c4046";
-  c.fillRect(w * 0.12, h * 0.74, w * 0.76, h * 0.1);
-  // 结构线
-  c.strokeStyle = "#2a2d31";
-  c.lineWidth = 1;
-  c.strokeRect(w * 0.12, bodyTop, w * 0.76, h * 0.66);
-  // 细节：红蓝指示灯
-  c.fillStyle = d.race === "terran" ? "#ffcf4d" : "#66ccff";
-  c.beginPath();
-  c.arc(w * 0.5, h * 0.5, 3, 0, Math.PI * 2);
-  c.fill();
-  // 顶部烟囱/塔
-  c.fillStyle = "#4a4e54";
-  c.fillRect(w * 0.42, bodyTop - h * 0.12, w * 0.16, h * 0.14);
-  tex.refresh();
-}
-
-function terranUnit(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  const texKey = d.tex ?? d.id;
-  removeTex(scene, texKey);
-  const tex = scene.textures.createCanvas(texKey, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 4, w / 2.6, h / 6, 0, 0, Math.PI * 2);
-  c.fill();
-  // 坦克/兵人：身体
-  c.fillStyle = "#8a8f96";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.62, w * 0.32, h * 0.3, 0, 0, Math.PI * 2);
-  c.fill();
-  c.fillStyle = "#b9bec4";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.5, w * 0.22, h * 0.22, 0, 0, Math.PI * 2);
-  c.fill();
-  // 炮/臂
-  c.fillStyle = "#5a5f66";
-  c.fillRect(w * 0.5, h * 0.2, w * 0.08, h * 0.4);
-  // 头灯
-  c.fillStyle = "#ff6b4d";
-  c.beginPath();
-  c.arc(w / 2, h * 0.42, 2.4, 0, Math.PI * 2);
-  c.fill();
-  tex.refresh();
-}
-
-/* ============ 神族：水晶/能量结构，青蓝发光 ============ */
-
-function protossBuilding(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  removeTex(scene, d.id);
-  const tex = scene.textures.createCanvas(d.id, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 6, w / 2.4, h / 7, 0, 0, Math.PI * 2);
-  c.fill();
-  // 底座（能量环）
-  c.fillStyle = "#1c3a4a";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.78, w * 0.36, h * 0.14, 0, 0, Math.PI * 2);
-  c.fill();
-  // 主体水晶柱
-  const topY = h * 0.16;
-  const grad = c.createLinearGradient(0, topY, 0, h * 0.8);
-  grad.addColorStop(0, "#7fe6ff");
-  grad.addColorStop(1, "#2b6f8f");
-  c.fillStyle = grad;
-  c.beginPath();
-  c.moveTo(w / 2, topY);
-  c.lineTo(w * 0.78, h * 0.62);
-  c.lineTo(w * 0.62, h * 0.82);
-  c.lineTo(w * 0.38, h * 0.82);
-  c.lineTo(w * 0.22, h * 0.62);
-  c.closePath();
-  c.fill();
-  // 发光核心
-  c.fillStyle = "rgba(180,250,255,0.9)";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.55, w * 0.1, h * 0.18, 0, 0, Math.PI * 2);
-  c.fill();
-  tex.refresh();
-}
-
-function protossUnit(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  const texKey = d.tex ?? d.id;
-  removeTex(scene, texKey);
-  const tex = scene.textures.createCanvas(texKey, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 4, w / 2.6, h / 6, 0, 0, Math.PI * 2);
-  c.fill();
-  // 悬浮盘
-  c.fillStyle = "#2b6f8f";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.66, w * 0.34, h * 0.16, 0, 0, Math.PI * 2);
-  c.fill();
-  // 能量体
-  const grad = c.createLinearGradient(0, h * 0.2, 0, h * 0.66);
-  grad.addColorStop(0, "#9ff0ff");
-  grad.addColorStop(1, "#3a8fb0");
-  c.fillStyle = grad;
-  c.beginPath();
-  c.moveTo(w / 2, h * 0.22);
-  c.lineTo(w * 0.7, h * 0.6);
-  c.lineTo(w / 2, h * 0.66);
-  c.lineTo(w * 0.3, h * 0.6);
-  c.closePath();
-  c.fill();
-  // 眼
-  c.fillStyle = "#fff";
-  c.beginPath();
-  c.arc(w / 2, h * 0.46, 2, 0, Math.PI * 2);
-  c.fill();
-  tex.refresh();
-}
-
-/* ============ 虫族：有机甲壳，紫绿，带脚底椭圆 ============ */
-
-function zergBuilding(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  const texKey = d.tex ?? d.id;
-  removeTex(scene, texKey);
-  const tex = scene.textures.createCanvas(texKey, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 6, w / 2.4, h / 7, 0, 0, Math.PI * 2);
-  c.fill();
-  // 有机底座
-  c.fillStyle = "#5a3a6a";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.74, w * 0.4, h * 0.18, 0, 0, Math.PI * 2);
-  c.fill();
-  // 甲壳主体
-  const grad = c.createLinearGradient(0, h * 0.16, 0, h * 0.8);
-  grad.addColorStop(0, "#9c5fb0");
-  grad.addColorStop(1, "#4a2a5a");
-  c.fillStyle = grad;
-  c.beginPath();
-  c.moveTo(w / 2, h * 0.16);
-  c.bezierCurveTo(w * 0.85, h * 0.3, w * 0.8, h * 0.7, w / 2, h * 0.82);
-  c.bezierCurveTo(w * 0.2, h * 0.7, w * 0.15, h * 0.3, w / 2, h * 0.16);
-  c.closePath();
-  c.fill();
-  // 开口发光
-  c.fillStyle = "#c9ff6a";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.56, w * 0.12, h * 0.1, 0, 0, Math.PI * 2);
-  c.fill();
-  tex.refresh();
-}
-
-function zergUnit(scene: Phaser.Scene, d: Def) {
-  const w = d.w ?? (d.kind === "building" ? 48 : 26);
-  const h = d.h ?? (d.kind === "building" ? 48 : 26);
-  const texKey = d.tex ?? d.id;
-  removeTex(scene, texKey);
-  const tex = scene.textures.createCanvas(texKey, w, h);
-  if (!tex) return;
-  const c = tex.getContext();
-  c.clearRect(0, 0, w, h);
-  c.fillStyle = "rgba(0,0,0,0.28)";
-  c.beginPath();
-  c.ellipse(w / 2, h - 4, w / 2.6, h / 6, 0, 0, Math.PI * 2);
-  c.fill();
-  // 身体（甲壳）
-  c.fillStyle = "#7a4a8a";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.58, w * 0.34, h * 0.34, 0, 0, Math.PI * 2);
-  c.fill();
-  // 亮甲
-  c.fillStyle = "#a86fc0";
-  c.beginPath();
-  c.ellipse(w / 2, h * 0.46, w * 0.2, h * 0.2, 0, 0, Math.PI * 2);
-  c.fill();
-  // 眼睛
-  c.fillStyle = "#c9ff6a";
-  c.beginPath();
-  c.arc(w * 0.42, h * 0.5, 2, 0, Math.PI * 2);
-  c.arc(w * 0.58, h * 0.5, 2, 0, Math.PI * 2);
-  c.fill();
-  tex.refresh();
-}
-
-// 避免未使用的导入告警（这些常量在 generateAll 中通过遍历数组使用）
-void 0;

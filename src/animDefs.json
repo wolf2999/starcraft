@@ -1,0 +1,2740 @@
+{
+  "b_academy": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_armory": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_barracks": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_bunker": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_cc": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_comsat": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_controltower": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_covertops": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_ebay": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_factory": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_machineshop": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_nuke": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_physicslab": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_reactor": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_rf": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_sci": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_sd": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_starport": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_techlab": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_turret": {
+    "race": "terran",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_battlecruiser": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_dropship": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_firebat": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_ghost": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_goliath": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_marine": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_medic": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_sciencevessel": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_scv": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_tank": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_valkyrie": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_vulture": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_wraith": {
+    "race": "terran",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_arbiter": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_archives": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_assimilator": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_cannon": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_fleetbeacon": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_forge": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_gateway": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_nexus": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_pylon": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_robobay": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_robofac": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_stargate": {
+    "race": "protoss",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_arbiter": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_archon": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_carrier": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_corsair": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_darkarchon": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_dragoon": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_dt": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_ht": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_interceptor": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_observer": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_probe": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_reaver": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_scout": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_shuttle": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_zealot": {
+    "race": "protoss",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_creepcolony": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_defilermound": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_evolution": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_extractor": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_greaterSpire": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_hatchery": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_hive": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_hydraden": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_lair": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 272,
+    "frameHeight": 272,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_nydus": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_queennest": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_spawningpool": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_spire": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_spore": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_sunken": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "b_ultracavern": {
+    "race": "zerg",
+    "kind": "building",
+    "frameWidth": 144,
+    "frameHeight": 144,
+    "cols": 8,
+    "frameCount": 20,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 7,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "build": {
+        "from": 8,
+        "to": 13,
+        "fps": 7.14,
+        "repeat": -1
+      },
+      "death": {
+        "from": 14,
+        "to": 19,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_defiler": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_devourer": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_drone": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_guardian": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_hydralisk": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_larva": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_lurker": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_mutalisk": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_overlord": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_queen": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_scourge": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_ultralisk": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 112,
+    "frameHeight": 84,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  },
+  "u_zergling": {
+    "race": "zerg",
+    "kind": "unit",
+    "frameWidth": 80,
+    "frameHeight": 60,
+    "cols": 8,
+    "frameCount": 26,
+    "actions": {
+      "idle": {
+        "from": 0,
+        "to": 5,
+        "fps": 6.25,
+        "repeat": -1
+      },
+      "walk": {
+        "from": 6,
+        "to": 13,
+        "fps": 10,
+        "repeat": -1
+      },
+      "attack": {
+        "from": 14,
+        "to": 19,
+        "fps": 12.5,
+        "repeat": 0
+      },
+      "death": {
+        "from": 20,
+        "to": 25,
+        "fps": 8.33,
+        "repeat": 0
+      }
+    }
+  }
+}

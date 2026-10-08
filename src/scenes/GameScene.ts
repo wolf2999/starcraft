@@ -1,5 +1,5 @@
 import * as Phaser from "phaser";
-import { Entity } from "../entities";
+import { Entity, spriteScale } from "../entities";
 import {
   ALL_DEFS,
   RESOURCE_DEFS,
@@ -34,6 +34,7 @@ import { getLostTemple } from "../maps/lostTemple";
 import { initLiquidUI, HUD_H, type LiquidUI } from "../ui/liquidHud";
 import { LiquidButton } from "liquidphaser/liquid";
 import { MouseEvent as LiquidMouseEvent, TextFormat } from "liquidphaser/fl";
+import { ANIM_DEFS } from "../animDefs";
 import type { Def } from "../config";
 
 export class GameScene extends Phaser.Scene {
@@ -107,6 +108,25 @@ export class GameScene extends Phaser.Scene {
     // terrain.png 真源在 public/maps/（与 lost-temple.tmj 同目录），
     // 用无 ../ 的相对引用，Tiled 与游戏端都能稳定找到。
     this.load.image("terrain", "maps/terrain.png");
+
+    // 种族实体贴图：gen-ase.mjs 导出的横条序列帧 spritesheet（与 art-src/libresprite
+    // 的 .ase 工程同源帧数据；动作帧区间元数据在 src/animDefs.json）。
+    // 每个实体一张横条，帧按 8 列行优先排布（单位帧 80×60 / 建筑帧 272×272）。
+    for (const d of [
+      ...TERRAN_BUILDINGS,
+      ...TERRAN_UNITS,
+      ...PROTOSS_BUILDINGS,
+      ...PROTOSS_UNITS,
+      ...ZERG_BUILDINGS,
+      ...ZERG_UNITS,
+    ]) {
+      const ad = ANIM_DEFS[d.tex];
+      if (!ad) continue;
+      this.load.spritesheet(d.tex, `textures/${d.race}/${d.tex}.png`, {
+        frameWidth: ad.frameWidth,
+        frameHeight: ad.frameHeight,
+      });
+    }
   }
 
   create() {
@@ -129,6 +149,7 @@ export class GameScene extends Phaser.Scene {
       this.mapLayer.add(this.creepLayer);
 
       generateAll(this);
+      this.registerAnims();
 
       // 加载 Lost Temple 风格地图（地形 + 资源 + 出生点）
       const map = getLostTemple();
@@ -259,6 +280,24 @@ export class GameScene extends Phaser.Scene {
     cam.scrollX = sx - this.camViewW() / 2;
     cam.scrollY = sy - this.camViewH() / 2;
     this.clampCamScroll();
+  }
+
+  /** 按 animDefs 注册动作动画（key = "<tex>:<动作名>"；Entity.playAnim 消费）。
+   * idle/walk/build 循环，attack/death 播一次（repeat 语义在 animDefs.json）。 */
+  registerAnims() {
+    for (const [tex, ad] of Object.entries(ANIM_DEFS)) {
+      if (!this.textures.exists(tex)) continue;
+      for (const [name, a] of Object.entries(ad.actions)) {
+        const key = `${tex}:${name}`;
+        if (this.anims.exists(key)) continue;
+        this.anims.create({
+          key,
+          frames: this.anims.generateFrameNumbers(tex, { start: a.from, end: a.to }),
+          frameRate: a.fps,
+          repeat: a.repeat,
+        });
+      }
+    }
   }
 
   spawnResource(id: string, gx: number, gy: number) {
@@ -768,7 +807,13 @@ export class GameScene extends Phaser.Scene {
     this.exitPlacing();
     const def = ALL_DEFS[defId];
     if (!def) return;
-    const ghost = this.add.image(-100, -100, def.tex).setOrigin(0.5, 0.72).setAlpha(0.55).setDepth(5080);
+    // 幽灵用序列帧第 0 帧（idle 起始帧），缩放与实体一致（否则建筑幽灵巨大）
+    const ghost = this.add
+      .image(-100, -100, def.tex)
+      .setOrigin(0.5, 0.72)
+      .setScale(spriteScale(def.isBuilding))
+      .setAlpha(0.55)
+      .setDepth(5080);
     const ring = this.add.graphics().setDepth(5079);
     this.placing = { defId, ghost, ring, gx: -999, gy: -999, valid: false };
   }
@@ -998,10 +1043,13 @@ export class GameScene extends Phaser.Scene {
       e.syncRender();
     }
 
-    // 死亡清理
+    // 死亡清理：先播 death 序列帧动画（约 0.7s），播完才销毁实体；
+    // 无序列帧的实体（中立资源等）立即走原清理路径。
     const before = this.entities.length;
     this.entities = this.entities.filter((e) => {
       if (e.alive) return true;
+      if (e.deathTimer < 0) e.startDeath(); // 首次发现死亡：开启动画并暂留
+      if (e.deathTimer > 0) return true; // 动画播放中，暂不销毁
       this.spawnDeathFx(e);
       // 销毁“单位容器”即连带销毁其下的 sprite/hpBar/selectionRing，
       // 并把容器从 entityLayer 移除，避免死亡实体在场景树里留空节点。
@@ -1009,6 +1057,10 @@ export class GameScene extends Phaser.Scene {
       if (e.gatherTarget) e.gatherTarget = null;
       return false;
     });
+    // 死亡动画计时（放在 filter 后：本帧新启动的动画下一帧才开始倒数）
+    for (const e of this.entities) {
+      if (!e.alive && e.deathTimer > 0) e.deathTimer -= dt * 1000;
+    }
     if (this.entities.length !== before) this.updateSupply();
 
     this.updateHud();
@@ -1185,11 +1237,3 @@ export class GameScene extends Phaser.Scene {
     });
   }
 }
-
-// 让未使用的导入保持引用，避免编译告警
-void TERRAN_UNITS;
-void PROTOSS_UNITS;
-void ZERG_UNITS;
-void TERRAN_BUILDINGS;
-void PROTOSS_BUILDINGS;
-void ZERG_BUILDINGS;

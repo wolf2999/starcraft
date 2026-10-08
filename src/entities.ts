@@ -6,15 +6,23 @@ import { ownerIsAI } from "./config";
 import { worldToScreen, TILE_W } from "./iso";
 import { heightAt } from "./terrain";
 import { findPath, PathCell } from "./pathfinding";
+import { ANIM_DEFS } from "./animDefs";
 
 let _id = 0;
+
+/** 实体贴图统一缩放：序列帧画布含 PAD 余量（单位 80×60 / 建筑 272×272），
+ * 缩放到旧占位图视觉尺度（单位 ≈26px、建筑 ≈1 格屋顶 64px），点选半径
+ * 公式（displayWidth/2 + 8px）与游戏手感保持不变。幽灵建筑共用此值。 */
+export function spriteScale(isBuilding: boolean | undefined): number {
+  return isBuilding ? 0.25 : 0.4;
+}
 
 export class Entity {
   id: number;
   def: Def;
   owner: Owner;
   scene: Phaser.Scene;
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   hpBar: Phaser.GameObjects.Graphics;
   selectionRing: Phaser.GameObjects.Graphics;
   // 每个 Entity 自己的容器：entityLayer → [Container(单位) → sprite/hpBar/ring]。
@@ -37,6 +45,11 @@ export class Entity {
   alive = true;
   constructed = true;
   hideHpBar = false;
+
+  // 动作动画（序列帧，key = "<tex>:<动作名>"，注册见 GameScene.registerAnims）
+  private curAnim: string | null = null;
+  /** 死亡动画剩余时长（ms）：-1 未开始；0 = 无动画（立即可清理）；>0 播放中 */
+  deathTimer = -1;
 
   // 移动指令
   moveTargetX: number | null = null;
@@ -97,7 +110,10 @@ export class Entity {
     // 纹理 key 应当用 def.tex（资源的“美术键”），之前误用 def.id 导致
     // “No texture found matching key: scv/marine/b_cc/...” 控制台刷屏
     // （参考之前 stepMove 异常的次根因：纹理缺失触发 sprite 渲染异常）。
-    this.sprite = scene.add.image(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
+    // 纹理来自 GameScene.preload 加载的横条序列帧 spritesheet（Sprite 支持动作动画）。
+    this.sprite = scene.add.sprite(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
+    // 序列帧画布比旧占位图大（含 PAD 余量），统一缩放到旧视觉尺度
+    this.sprite.setScale(spriteScale(def.isBuilding));
     this.selectionRing = scene.add.graphics();
     this.hpBar = scene.add.graphics();
 
@@ -355,8 +371,66 @@ export class Entity {
   }
 
   fire(target: Entity) {
+    this.playAnim("attack", true); // 每次出手重播攻击动作（与攻击间隔同步）
     target.takeDamage(this.attackDamage(target.isAir), this);
     this.onAttack?.(this, target);
+  }
+
+  /* ============ 动作动画（序列帧） ============ */
+
+  /** 当前应有动作名。优先级：死亡 > 建筑(施工/待机) > 单位(攻击/采矿/建造/移动/待机) */
+  private desiredAnim(): string {
+    if (!this.alive) return "death";
+    if (this.def.isBuilding) return this.constructed ? "idle" : "build";
+    if (this.combatTarget && this.combatTarget.alive) {
+      const t = this.combatTarget;
+      const d = Phaser.Math.Distance.Between(this.x, this.y, t.x, t.y);
+      const reach = (this.def.range ?? 0) / TILE_W + this.r / TILE_W + t.r / TILE_W;
+      if (d <= reach) return "attack";
+    }
+    if (this.gatherState === "mining") return "attack"; // 采矿挥动
+    if (
+      this.moveTargetX !== null ||
+      this.gatherState === "toResource" ||
+      this.gatherState === "returning"
+    ) {
+      return "walk";
+    }
+    if (this.buildTarget) {
+      // 建造者：走向工地 = walk，贴身施工 = attack（锤击摆动）
+      const d = Phaser.Math.Distance.Between(
+        this.x,
+        this.y,
+        this.buildTarget.x,
+        this.buildTarget.y
+      );
+      const reach = this.buildTarget.r / TILE_W + this.r / TILE_W + 0.35;
+      return d > reach ? "walk" : "attack";
+    }
+    return "idle";
+  }
+
+  /** 切换动作动画（同动作不重播；force=true 用于攻击出手等需要重播的场景） */
+  playAnim(name: string, force = false) {
+    const key = `${this.def.tex}:${name}`;
+    if (!force && this.curAnim === key) return;
+    if (!this.scene.anims.exists(key)) return; // 中立资源等无序列帧
+    this.curAnim = key;
+    this.sprite.play(key);
+  }
+
+  /** 死亡动画开场（GameScene 死亡清理时首次调用）：返回是否播了动画 */
+  startDeath(): boolean {
+    const d = ANIM_DEFS[this.def.tex]?.actions["death"];
+    if (!d) {
+      this.deathTimer = 0; // 无序列帧（中立资源等）：立即可清理
+      return false;
+    }
+    this.deathTimer = ((d.to - d.from + 1) / d.fps) * 1000;
+    this.selectionRing.clear();
+    this.hpBar.clear();
+    this.playAnim("death", true);
+    return true;
   }
 
   takeDamage(amount: number, _from: Entity) {
@@ -379,6 +453,8 @@ export class Entity {
     const h = heightAt(this.x, this.y);
     const { sx, sy } = worldToScreen(this.x, this.y, h);
     this.sprite.setPosition(sx, sy);
+    // 动作动画按状态切换（idle/walk/attack/build；同动作不重播）
+    this.playAnim(this.desiredAnim());
     // 非建筑：每帧把“单位容器”的 depth 设成等距排序值（x+y 越大越靠前/靠下）。
     // 注意此处改的是 container 的 depth，不再是 sprite 的——sprite 的 depth 只在容器内排序用。
     if (!this.def.isBuilding)
