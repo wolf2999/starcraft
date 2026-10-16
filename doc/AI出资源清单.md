@@ -1,7 +1,7 @@
 # AI 出资源清单 —— 逐条执行版
 
 > 本文件是**给出图 AI 的直接执行清单**，共 98 张。每条 prompt 已拼好公共基底，**复制即用，不要改写风格词**。
-> 工程规格（方向分级/接入管线）见同目录 `资源需求.md`，与本清单无关，出图时忽略。
+> 工程规格见同目录 `资源需求.md`。**注意：单位/建筑图（No.8~96）的落盘位置已改为 `art-src/ai-src/` 关键帧注入管线（见下方规则 8）**，出图时忽略工程细节。
 
 ## 执行规则（先读）
 
@@ -12,7 +12,9 @@
 5. 单位朝向统一**朝右**
 6. **No.1~5（地形 5 帧）同一批、同一 seed** 生成，色调必须统一（它们是全项目风格锚点）
 7. 每张出 2~4 候选挑最好
-8. 抠图后按标题里的路径**同名覆盖**占位文件
+8. 抠图后落盘位置分两类：
+   - **No.1~7 地图/矿/气泉 + No.97~98 特效**：按标题里的路径**同名覆盖** `public/textures/` 下占位文件（黑底特效免抠图直接覆盖）
+   - **No.8~96 单位/建筑**：放 **`art-src/ai-src/<种族>/<tex>/idle/00.png`**（`<种族>`∈terran/protoss/zerg，`<tex>`=标题里的文件名去扩展名），然后跑 `node scripts/gen-ase.mjs` 自动注入成横条 + .ase 工程；同一动作要出整段关键帧时按 `<动作>/NN.png` 扩展（帧数：单位 idle 6/walk 8/attack 6/death 6，建筑 idle 8/build 6/death 6，允许稀疏），详见 `资源需求.md` §4。**不要**直接覆盖 public/textures 下的横条（会被脚本重新生成覆盖回去）
 
 **负面提示词（SD 系通用；不支持负面输入的模型忽略此条）**：
 
@@ -54,13 +56,13 @@ isometric 2:1 dimetric top-down game asset, sci-fi RTS style inspired by StarCra
 isometric 2:1 dimetric top-down game asset, sci-fi RTS style inspired by StarCraft, hand-painted stylized texture, soft top-left lighting, muted saturated colors, clean readable silhouette, single object centered, isolated on solid magenta background #FF00FF, no ground shadow, no text, no watermark, a single 2:1 diamond terrain tile, weathered wooden and metal bridge deck spanning over water, plank texture (#685838 tone), no landmarks
 ```
 
-### 6. `maps/mineral.png` — 72×80
+### 6. `maps/mineral.png` — 96×104
 
 ```
 isometric 2:1 dimetric top-down game asset, sci-fi RTS style inspired by StarCraft, hand-painted stylized texture, soft top-left lighting, muted saturated colors, clean readable silhouette, single object centered, isolated on solid magenta background #FF00FF, no ground shadow, no text, no watermark, a resource node: cluster of glowing translucent blue crystals (#3a7fd6 tones) growing from a dark rocky base, sci-fi mineral field, sparkling highlights
 ```
 
-### 7. `maps/vespene.png` — 80×80
+### 7. `maps/vespene.png` — 104×104
 
 ```
 isometric 2:1 dimetric top-down game asset, sci-fi RTS style inspired by StarCraft, hand-painted stylized texture, soft top-left lighting, muted saturated colors, clean readable silhouette, single object centered, isolated on solid magenta background #FF00FF, no ground shadow, no text, no watermark, a resource node: small volcanic geyser vent with wisps of green gas rising, cracked rocky base with yellow-green glow, sci-fi vespene geyser

@@ -28,8 +28,8 @@ const BIG_UNITS = new Set([
 ]);
 
 function sizeFor(def) {
-  if (def.id === "mineral") return { w: 72, h: 80 };
-  if (def.id === "vespene") return { w: 80, h: 80 };
+  if (def.id === "mineral") return { w: 96, h: 104 };
+  if (def.id === "vespene") return { w: 104, h: 104 };
   if (def.kind === "building") return BIG_BUILDINGS.has(def.id) ? { w: 256, h: 256 } : { w: 128, h: 128 };
   return BIG_UNITS.has(def.id) ? { w: 96, h: 96 } : { w: 64, h: 64 };
 }

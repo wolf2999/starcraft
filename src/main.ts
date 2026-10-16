@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { MenuScene } from "./scenes/MenuScene";
 import { GameScene } from "./scenes/GameScene";
 import { GAME_WIDTH, GAME_HEIGHT } from "./config";
 
@@ -17,7 +18,8 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   // 关闭 Phaser 默认右键菜单，方便我们用右键下达指令
   disableContextMenu: true,
-  scene: [GameScene]
+  // 场景启动链：主菜单（星际式选敌/开始）→ GameScene（经 scene data 传 enemies）
+  scene: [MenuScene, GameScene]
 };
 
 const game = new Phaser.Game(config);

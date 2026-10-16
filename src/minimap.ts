@@ -9,7 +9,7 @@ import {
   worldToScreen,
 } from "./iso";
 import { typeAt, TerrainType } from "./terrain";
-import { ownerIsAI, Owner } from "./config";
+import { ownerIsAI, Owner, FOG_EXPLORED_ALPHA } from "./config";
 
 /**
  * 小地图（星际风格，渲染在 Phaser 内、屏幕层固定不随相机滚动）：
@@ -47,6 +47,13 @@ export interface MinimapEntity {
   def: { isNeutral?: boolean; isBuilding?: boolean };
 }
 
+/** 迷雾网格（GameScene 持有；0 未探索 / 1 已探索 / 2 可见，玩家视角） */
+export interface FogGrid {
+  data: Uint8Array;
+  cols: number;
+  rows: number;
+}
+
 function entityColor(e: MinimapEntity): string {
   if (e.def.isNeutral) return "#ffd24a"; // 资源（矿/气）
   return ownerIsAI(e.owner) ? "#ff5252" : "#4ade4a";
@@ -62,6 +69,8 @@ export class Minimap {
   private canvasTexture: Phaser.Textures.CanvasTexture;
   private ctx: CanvasRenderingContext2D;
   private terrainCanvas: HTMLCanvasElement;
+  /** 迷雾层画布（与底图同尺寸的屏幕空间烘焙缓存；null = 未启用迷雾） */
+  private fogCanvas: HTMLCanvasElement | null = null;
   private image: Phaser.GameObjects.Image;
   private frame: Phaser.GameObjects.Graphics;
 
@@ -130,13 +139,55 @@ export class Minimap {
     ctx.putImageData(img, 0, 0);
   }
 
-  /** 每帧刷新：底图 + 实体点 + 相机视野框，画完 refresh 上传 */
-  refresh(entities: MinimapEntity[]) {
+  /** 迷雾层重绘（GameScene 迷雾 tick 时调用，非每帧）：把迷雾网格按等距反投影
+   * 烘焙成与底图同尺寸的屏幕空间画布——未探索全黑、已探索按 FOG_EXPLORED_ALPHA
+   * 暗化、可见透明；refresh 每帧仅 drawImage 该缓存，零逐像素开销。 */
+  updateFog(fog: FogGrid) {
+    if (!this.fogCanvas) {
+      this.fogCanvas = document.createElement("canvas");
+      this.fogCanvas.width = MM_W;
+      this.fogCanvas.height = MM_H;
+    }
+    const ctx = this.fogCanvas.getContext("2d")!;
+    const img = ctx.createImageData(MM_W, MM_H);
+    const exploredAlpha = Math.round(255 * FOG_EXPLORED_ALPHA);
+    for (let py = 0; py < MM_H; py++) {
+      for (let px = 0; px < MM_W; px++) {
+        // 小地图像素 → 世界屏幕坐标 → 反投影 → 格坐标（与 buildTerrain 同公式）
+        const a = (px / MM_SCALE - ORIGIN_X) / HALF_W;
+        const b = (py / MM_SCALE - ORIGIN_Y) / HALF_H;
+        const gx = Math.floor((a + b) / 2);
+        const gy = Math.floor((b - a) / 2);
+        let alpha = 255; // 带外（void）/未探索
+        if (gx >= 0 && gy >= 0 && gx < fog.cols && gy < fog.rows) {
+          const st = fog.data[gy * fog.cols + gx];
+          alpha = st === 2 ? 0 : st === 1 ? exploredAlpha : 255;
+        }
+        const i = (py * MM_W + px) * 4;
+        img.data[i + 3] = alpha; // RGB 恒黑（ImageData 初始即为 0）
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  /** 每帧刷新：底图 + 迷雾层 + 实体点 + 相机视野框，画完 refresh 上传 */
+  refresh(entities: MinimapEntity[], fog?: FogGrid) {
     const ctx = this.ctx;
     ctx.drawImage(this.terrainCanvas, 0, 0);
+    if (this.fogCanvas) ctx.drawImage(this.fogCanvas, 0, 0);
 
     for (const e of entities) {
       if (!e.alive) continue;
+      // 迷雾过滤：资源需已探索（≥1）、敌方需可见（=2）才画点；我方恒显示
+      if (fog) {
+        const gx = Math.floor(e.x);
+        const gy = Math.floor(e.y);
+        const st =
+          gx >= 0 && gy >= 0 && gx < fog.cols && gy < fog.rows
+            ? fog.data[gy * fog.cols + gx]
+            : 0;
+        if (e.def.isNeutral ? st < 1 : ownerIsAI(e.owner) && st < 2) continue;
+      }
       const p = worldToScreen(e.x, e.y);
       const mx = p.sx * MM_SCALE;
       const my = p.sy * MM_SCALE;

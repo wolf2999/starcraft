@@ -41,6 +41,20 @@ export interface LiquidUI {
   layout(w: number, h: number): void;
 }
 
+/**
+ * 递归钉屏：把 Liquid 组件树（含 lib 内部子件）scrollFactor 置 0。
+ * 必要性：Stage 自身 sf=0 只保证【渲染】钉屏（容器渲染忽略子项 sf），
+ * 但 Phaser 输入命中（InputManager.hitTest）按每个对象【自身】的 scrollFactor
+ * 把屏幕点换算回世界坐标——子项默认 sf=1，相机滚动后命中坐标跑到世界深处，
+ * 所有 Liquid 按钮点击全部落空。置 0 后命中换算=屏幕坐标，与渲染及 lib
+ * 「world 即屏坐标」的约定一致。组件所有内部子件创建完成后调用（addChild 后）。
+ */
+export function pinLiquidUI(root: unknown): void {
+  const obj = root as { setScrollFactor?: (x: number, y: number) => void; list?: unknown[] };
+  obj.setScrollFactor?.(0, 0);
+  if (Array.isArray(obj.list)) for (const c of obj.list) pinLiquidUI(c);
+}
+
 export async function initLiquidUI(scene: Phaser.Scene): Promise<LiquidUI> {
   const cam = scene.cameras.main;
   // —— liquidphaser 初始化五步（顺序硬约束，见 lib/fl.ts 头注释）——
@@ -88,9 +102,10 @@ export async function initLiquidUI(scene: Phaser.Scene): Promise<LiquidUI> {
   const lblUnits = mkLabel(120);
   const lblSel = mkLabel(140);
   const lblHint = mkLabel(640, true);
-  [lblMineral, lblVespene, lblSupply, lblUnits, lblSel, lblHint].forEach((l) =>
-    stage.addChild(l)
-  );
+  [lblMineral, lblVespene, lblSupply, lblUnits, lblSel, lblHint].forEach((l) => {
+    stage.addChild(l);
+    pinLiquidUI(l);
+  });
 
   const minimap = new Minimap(scene, cam);
 

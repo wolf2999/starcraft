@@ -99,14 +99,15 @@ function makeTile(scene: Phaser.Scene) {
 
 function makeMineral(scene: Phaser.Scene) {
   removeTex(scene, "mineral");
-  const tex = scene.textures.createCanvas("mineral", 36, 40);
+  // 画布 = 显示尺寸(48×52) × 2（与 AI 出图规格一致，neutral 缩放 0.5 后即为显示尺寸）
+  const tex = scene.textures.createCanvas("mineral", 96, 104);
   if (!tex) return;
   const c = tex.getContext();
-  c.clearRect(0, 0, 36, 40);
+  c.clearRect(0, 0, 96, 104);
   // 阴影
   c.fillStyle = "rgba(0,0,0,0.3)";
   c.beginPath();
-  c.ellipse(18, 34, 16, 6, 0, 0, Math.PI * 2);
+  c.ellipse(48, 88, 43, 15, 0, 0, Math.PI * 2);
   c.fill();
   // 晶体簇
   const drawCrystal = (cx: number, cy: number, w: number, hh: number, col: string) => {
@@ -126,35 +127,36 @@ function makeMineral(scene: Phaser.Scene) {
     c.closePath();
     c.fill();
   };
-  drawCrystal(18, 26, 16, 24, "#4fd0e0");
-  drawCrystal(10, 30, 12, 18, "#3bb8c8");
-  drawCrystal(26, 30, 12, 18, "#3bb8c8");
+  drawCrystal(48, 68, 43, 62, "#4fd0e0");
+  drawCrystal(27, 78, 32, 47, "#3bb8c8");
+  drawCrystal(69, 78, 32, 47, "#3bb8c8");
   tex.refresh();
 }
 
 function makeVespene(scene: Phaser.Scene) {
   removeTex(scene, "vespene");
-  const tex = scene.textures.createCanvas("vespene", 40, 40);
+  // 画布 = 显示尺寸(52×52) × 2（同上，neutral 缩放 0.5）
+  const tex = scene.textures.createCanvas("vespene", 104, 104);
   if (!tex) return;
   const c = tex.getContext();
-  c.clearRect(0, 0, 40, 40);
+  c.clearRect(0, 0, 104, 104);
   c.fillStyle = "rgba(0,0,0,0.3)";
   c.beginPath();
-  c.ellipse(20, 34, 16, 6, 0, 0, Math.PI * 2);
+  c.ellipse(52, 88, 42, 15, 0, 0, Math.PI * 2);
   c.fill();
   // 球体
   c.fillStyle = "#6b4f2a";
   c.beginPath();
-  c.ellipse(20, 22, 13, 14, 0, 0, Math.PI * 2);
+  c.ellipse(52, 57, 34, 36, 0, 0, Math.PI * 2);
   c.fill();
   c.fillStyle = "#8a6a36";
   c.beginPath();
-  c.ellipse(16, 18, 6, 7, 0, 0, Math.PI * 2);
+  c.ellipse(42, 47, 16, 18, 0, 0, Math.PI * 2);
   c.fill();
   // 绿色气体孔
   c.fillStyle = "#9bff6a";
   c.beginPath();
-  c.arc(20, 14, 4, 0, Math.PI * 2);
+  c.arc(52, 36, 10, 0, Math.PI * 2);
   c.fill();
   tex.refresh();
 }
