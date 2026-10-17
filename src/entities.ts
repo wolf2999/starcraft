@@ -11,10 +11,10 @@ import { ANIM_DEFS } from "./animDefs";
 let _id = 0;
 
 /** 实体贴图统一缩放：序列帧画布含 PAD 余量（单位 80×60 / 建筑 272×272），
- * 缩放到旧占位图视觉尺度（单位 ≈26px、建筑 ≈1 格屋顶 64px），点选半径
- * 公式（displayWidth/2 + 8px）与游戏手感保持不变。幽灵建筑共用此值。 */
+ * 缩放到目标视觉尺度（单位内容 ≈26px、建筑 ≈1.3 格屋顶），点选半径
+ * 公式（displayWidth/2 + 8px）随缩放自动适配。幽灵建筑共用此值。 */
 export function spriteScale(isBuilding: boolean | undefined): number {
-  return isBuilding ? 0.25 : 0.4;
+  return isBuilding ? 0.33 : 0.6;
 }
 
 export class Entity {
@@ -178,9 +178,9 @@ export class Entity {
     // （参考之前 stepMove 异常的次根因：纹理缺失触发 sprite 渲染异常）。
     // 纹理来自 GameScene.preload 加载的横条序列帧 spritesheet（Sprite 支持动作动画）。
     this.sprite = scene.add.sprite(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
-    // 序列帧画布比旧占位图大（含 PAD 余量），统一缩放到旧视觉尺度
-    // 资源（mineral/vespene）画布 = 显示尺寸×2，按 0.5 缩放还原目标显示大小
-    this.sprite.setScale(def.isNeutral ? 0.5 : spriteScale(def.isBuilding));
+    // 序列帧画布比旧占位图大（含 PAD 余量），统一缩放到目标视觉尺度
+    // 资源（mineral/vespene）画布 = 显示尺寸×2，按 0.65 缩放略放大目标显示
+    this.sprite.setScale(def.isNeutral ? 0.65 : spriteScale(def.isBuilding));
     this.selectionRing = scene.add.graphics();
     this.hpBar = scene.add.graphics();
 
