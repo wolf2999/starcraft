@@ -275,6 +275,8 @@ export interface Def {
   larvaMorph?: boolean;
   /** 建筑：必须建在特定资源上（精炼厂） */
   requiresVespeneGeyser?: boolean;
+  /** 视觉缩放倍率（乘在 spriteScale/资源缩放之上；气矿类建筑罩住气泉用） */
+  visualScale?: number;
   /** 建筑：可降下/收起（供给站） */
   canLift?: boolean;
   /** 建筑：是否需要菌毯（虫族） */
@@ -356,7 +358,7 @@ export interface Def {
 export const BUILDINGS: Def[] = [
   {
     id: "cc", name: "指挥中心", kind: "building", race: "terran", tex: "b_cc", minerals: 400, vespene: 0,
-    supply: 0, buildTime: 8000, hp: 1500, supplyProvided: 10,
+    supply: 0, buildTime: 8000, hp: 1500, supplyProvided: 10, w: 128, size: 128,
     produces: ["scv", "comsat", "nuclear"], desc: "生产 SCV；附属卫星站/核弹井"
   },
   {
@@ -366,7 +368,7 @@ export const BUILDINGS: Def[] = [
   },
   {
     id: "rf", name: "精炼厂", kind: "building", race: "terran", tex: "b_rf", minerals: 100, vespene: 0,
-    supply: 0, buildTime: 3000, hp: 500, requiresVespeneGeyser: true,
+    supply: 0, buildTime: 3000, hp: 500, requiresVespeneGeyser: true, visualScale: 1.6,
     desc: "建在瓦斯气矿上，采集瓦斯"
   },
   {
@@ -512,7 +514,7 @@ export const UNITS: Def[] = [
 export const PROTOSS_BUILDINGS: Def[] = [
   {
     id: "nexus", name: "枢纽", kind: "building", race: "protoss", tex: "b_nexus", minerals: 400, vespene: 0,
-    supply: 0, buildTime: 8000, hp: 1500, shield: 1500, supplyProvided: 10,
+    supply: 0, buildTime: 8000, hp: 1500, shield: 1500, supplyProvided: 10, w: 128, size: 128,
     produces: ["probe"], desc: "主基地，生产探针"
   },
   {
@@ -521,7 +523,7 @@ export const PROTOSS_BUILDINGS: Def[] = [
   },
   {
     id: "assimilator", name: "吸收器", kind: "building", race: "protoss", tex: "b_assimilator", minerals: 100, vespene: 0,
-    supply: 0, buildTime: 3000, hp: 300, shield: 300, requiresVespeneGeyser: true, desc: "建在瓦斯气泉上采集瓦斯"
+    supply: 0, buildTime: 3000, hp: 300, shield: 300, requiresVespeneGeyser: true, visualScale: 1.6, desc: "建在瓦斯气泉上采集瓦斯"
   },
   {
     id: "gateway", name: "兵营", kind: "building", race: "protoss", tex: "b_gateway", minerals: 150, vespene: 0,
@@ -632,17 +634,17 @@ export const PROTOSS_UNITS: Def[] = [
 export const ZERG_BUILDINGS: Def[] = [
   {
     id: "hatchery", name: "孵化场", kind: "building", race: "zerg", tex: "b_hatchery", minerals: 300, vespene: 0,
-    supply: 0, buildTime: 8000, hp: 1500, supplyProvided: 10, needsCreep: true, larvaMorph: true,
+    supply: 0, buildTime: 8000, hp: 1500, supplyProvided: 10, needsCreep: true, larvaMorph: true, w: 128, size: 128,
     produces: ["larva", "lair", "nydus"], desc: "主基地，产幼虫；幼虫变异全部虫族单位；可变异→巢穴"
   },
   { // 孵化场升级形态（变异后替换孵化场）
     id: "lair", name: "巢穴", kind: "building", race: "zerg", tex: "b_lair", minerals: 150, vespene: 100,
-    supply: 0, buildTime: 6000, hp: 2000, supplyProvided: 10, needsCreep: true, upgradeOf: "hatchery", larvaMorph: true,
+    supply: 0, buildTime: 6000, hp: 2000, supplyProvided: 10, needsCreep: true, upgradeOf: "hatchery", larvaMorph: true, w: 128, size: 128,
     produces: ["hive"], desc: "孵化场升级，解锁飞龙塔/皇后巢等；可再升→母巢"
   },
   { // 巢穴升级形态
     id: "hive", name: "母巢", kind: "building", race: "zerg", tex: "b_hive", minerals: 200, vespene: 150,
-    supply: 0, buildTime: 8000, hp: 2500, supplyProvided: 10, needsCreep: true, upgradeOf: "lair", larvaMorph: true,
+    supply: 0, buildTime: 8000, hp: 2500, supplyProvided: 10, needsCreep: true, upgradeOf: "lair", larvaMorph: true, w: 128, size: 128,
     desc: "巢穴升级，终极主基地"
   },
   {
@@ -651,7 +653,7 @@ export const ZERG_BUILDINGS: Def[] = [
   },
   {
     id: "extractor", name: "萃取器", kind: "building", race: "zerg", tex: "b_extractor", minerals: 25, vespene: 0,
-    supply: 0, buildTime: 3000, hp: 500, requiresVespeneGeyser: true, needsCreep: true, desc: "瓦斯采集"
+    supply: 0, buildTime: 3000, hp: 500, requiresVespeneGeyser: true, needsCreep: true, visualScale: 1.6, desc: "瓦斯采集"
   },
   {
     id: "evolutionChamber", name: "进化室", kind: "building", race: "zerg", tex: "b_evolution", minerals: 75, vespene: 0,

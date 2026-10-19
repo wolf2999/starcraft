@@ -71,6 +71,7 @@ import {
   MAP_ROWS,
 } from "../iso";
 import { heightAt, typeAt } from "../terrain";
+import { setDynamicBlocked } from "../pathfinding";
 import { buildTerrainTilemap } from "../tilemap";
 import { getLostTemple, buildBases } from "../maps/lostTemple";
 import { initLiquidUI, pinLiquidUI, HUD_H, type LiquidUI } from "../ui/liquidHud";
@@ -702,8 +703,10 @@ export class GameScene extends Phaser.Scene {
     e.constructed = constructed;
 
     if (def.isBuilding) {
-      // 建筑容器 depth 用 200+x+y，低于单位层（1000+…），保证单位绘制在建筑物之上。
-      e.container.setDepth(200 + x + y);
+      // 建筑与单位统一等距画家算法 depth（1000+x+y+高度*100）：
+      // 建筑北面的单位会被建筑正确遮挡、南面的单位画在建筑之前。
+      // 旧方案建筑恒 200+x+y 垫底，贴图放大后“单位浮在建筑顶上”穿帮，故统一公式。
+      e.container.setDepth(1000 + x + y + heightAt(x, y) * 100);
     }
 
     // 迷雾内出生的敌方实体立即隐藏（否则要等下一个迷雾 tick 才隐藏，出现闪烁）
@@ -1459,7 +1462,7 @@ export class GameScene extends Phaser.Scene {
     const ghost = this.add
       .image(-100, -100, def.tex)
       .setOrigin(0.5, 0.72)
-      .setScale(spriteScale(def.isBuilding))
+      .setScale(spriteScale(def.isBuilding) * (def.visualScale ?? 1))
       .setAlpha(0.55)
       .setDepth(5080);
     const ring = this.add.graphics().setDepth(5079);
@@ -2304,6 +2307,24 @@ export class GameScene extends Phaser.Scene {
     // 每帧把 scroll 夹回地图范围，任何移动相机的路径（拖动/跳转/方向键）都不会露黑边
     this.clampCamScroll();
 
+    // 每帧重建动态障碍集（完工建筑占地格 + 资源格）供 A* 与直线移动共用：
+    // 未完工建筑放行（工人要进格施工）；实体量级 <200，重建开销可忽略
+    const blocked = new Set<number>();
+    for (const e of this.entities) {
+      if (!e.alive) continue;
+      if (e.def.isBuilding) {
+        if (!e.constructed) continue;
+        const fp = this.footprintOf(e.def);
+        const x0 = Math.round(e.x - fp / 2);
+        const y0 = Math.round(e.y - fp / 2);
+        for (let x = x0; x < x0 + fp; x++)
+          for (let y = y0; y < y0 + fp; y++) blocked.add(y * MAP_COLS + x);
+      } else if (e.def.isNeutral) {
+        blocked.add(Math.floor(e.y) * MAP_COLS + Math.floor(e.x));
+      }
+    }
+    setDynamicBlocked(blocked);
+
     // 悬停名签跟随（实体移动/相机滚动时位置每帧校正）
     this.syncHoverName();
 
@@ -2496,7 +2517,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const d = Phaser.Math.Distance.Between(e.x, e.y, t.x, t.y);
-    const reach = e.r / TILE_W + t.r / TILE_W + 0.35;
+    // reach 含贴边兜底 0.85：目标建筑格是寻路障碍，SCV 只能站邻格修理
+    const reach = Math.max(
+      e.r / TILE_W + t.r / TILE_W + 0.35,
+      (e.r + t.r) / TILE_W + 0.85
+    );
     if (d > reach) {
       e.stepMove(dt, t.x, t.y);
       return;
@@ -2547,7 +2572,9 @@ export class GameScene extends Phaser.Scene {
       // r 是像素半径（def.size/2），必须 /TILE_W 换算成格再比较——
       // 之前直接相加（矿 18 + 单位 8 = 26"格"≈ 屏幕 1600px），SCV 站在
       // 几格外就判"已到达"原地隔空采矿，看起来完全没反应。
-      if (d <= res.r / TILE_W + e.r / TILE_W + 0.25) {
+      if (d <= res.r / TILE_W + e.r / TILE_W + 0.85) {
+        // 余量 0.85：资源格是寻路障碍，单位最远停在邻格（对角 1.41 格），
+        // 阈值必须覆盖八邻格，否则采集死循环走位
         e.gatherState = "mining";
         e.mineTimer = 1.5;
       } else {
@@ -2581,8 +2608,9 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       const d = Phaser.Math.Distance.Between(e.x, e.y, b.x, b.y);
-      // 到达基地阈值同上：r 像素 → 格换算
-      if (d <= b.r / TILE_W + e.r / TILE_W + 0.3) {
+      // 到达基地阈值按格换算（r 像素 → 格换算）；基地格是寻路障碍，
+      // 余量 0.8 覆盖贴边停靠（正邻/对角邻格），否则返程死循环走位
+      if (d <= b.r / TILE_W + e.r / TILE_W + 0.8) {
         const bucket = this.resOf(e.owner);
         if (res.def.id === "mineral") bucket.minerals += e.carrying;
         else bucket.vespene += e.carrying;

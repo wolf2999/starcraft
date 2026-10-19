@@ -5,7 +5,7 @@ import type { Owner } from "./config";
 import { ownerIsAI } from "./config";
 import { worldToScreen, TILE_W } from "./iso";
 import { heightAt } from "./terrain";
-import { findPath, PathCell } from "./pathfinding";
+import { findPath, PathCell, isBlocked } from "./pathfinding";
 import { ANIM_DEFS } from "./animDefs";
 
 let _id = 0;
@@ -179,8 +179,8 @@ export class Entity {
     // 纹理来自 GameScene.preload 加载的横条序列帧 spritesheet（Sprite 支持动作动画）。
     this.sprite = scene.add.sprite(sx, sy, def.tex ?? def.id).setOrigin(0.5, 0.72);
     // 序列帧画布比旧占位图大（含 PAD 余量），统一缩放到目标视觉尺度
-    // 资源（mineral/vespene）画布 = 显示尺寸×2，按 0.65 缩放略放大目标显示
-    this.sprite.setScale(def.isNeutral ? 0.65 : spriteScale(def.isBuilding));
+    // 资源（mineral/vespene）画布 = 显示尺寸×2；def.visualScale 为个别实体视觉微调倍率
+    this.sprite.setScale((def.isNeutral ? 0.65 : spriteScale(def.isBuilding)) * (def.visualScale ?? 1));
     this.selectionRing = scene.add.graphics();
     this.hpBar = scene.add.graphics();
 
@@ -199,9 +199,8 @@ export class Entity {
     // 把“单位容器”加入传入的单位层（entityLayer），形成 entityLayer → [Container(单位)] 的树。
     if (parent) parent.add(this.container);
 
-    // 初始 depth：非建筑按等距排序公式（1000 + x + y）；
-    // 建筑在 spawnFromDef 里另设 200+x+y（低于单位，避免被单位盖住）。
-    if (!def.isBuilding) this.container.setDepth(1000 + x + y);
+    // 初始 depth：统一等距排序公式（1000 + x + y + 高度*100），建筑与单位同式；
+    // 建筑不动只在 spawnFromDef 设一次初值，单位每帧在 syncRender 里刷新。
 
     // 寻路缓存与冷却，构造时必须初始化为安全默认值：
     // stepMove 里 this.path.length 的访问依赖此字段为数组，
@@ -514,8 +513,13 @@ export class Entity {
     if (this.combatTarget) {
       const t = this.combatTarget as Entity;
       const d = Phaser.Math.Distance.Between(this.x, this.y, t.x, t.y);
-      // reach 统一换算到“格”量纲：range 与半径 r 都是 px，需除以 TILE_W
-      const reach = this.rangePx / TILE_W + this.r / TILE_W + t.r / TILE_W;
+      // reach 统一换算到“格”量纲：range 与半径 r 都是 px，需除以 TILE_W。
+      // 贴边兜底：目标（建筑/资源）所在格是寻路障碍，近战单位只能站到邻格，
+      // 用 max(reach, 半径和+0.85) 保证正邻/对角邻格都能攻击，不会隔障碍卡死。
+      const reach = Math.max(
+        this.rangePx / TILE_W + this.r / TILE_W + t.r / TILE_W,
+        (this.r + t.r) / TILE_W + 0.85
+      );
       if (d <= reach) {
         // 在射程内：停下开火
         this.moveTargetX = null;
@@ -547,7 +551,9 @@ export class Entity {
     // 攻击移动：到达后恢复待命
     if (this.attackMove && this.moveTargetX !== null && this.moveTargetY !== null) {
       const d = Phaser.Math.Distance.Between(this.x, this.y, this.moveTargetX, this.moveTargetY);
-      if (d < 0.5) {
+      // 目标落在障碍格（建筑/资源）上时按贴边到达（A* 已把目标吸附到邻格）
+      const arriveR = isBlocked(Math.floor(this.moveTargetX), Math.floor(this.moveTargetY)) ? 1.6 : 0.5;
+      if (d < arriveR) {
         this.moveTargetX = null;
         this.moveTargetY = null;
         this.path = [];
@@ -559,7 +565,8 @@ export class Entity {
     // 普通移动
     if (!this.attackMove && this.moveTargetX !== null && this.moveTargetY !== null) {
       const d = Phaser.Math.Distance.Between(this.x, this.y, this.moveTargetX, this.moveTargetY);
-      if (d < 0.5) {
+      const arriveR = isBlocked(Math.floor(this.moveTargetX), Math.floor(this.moveTargetY)) ? 1.6 : 0.5;
+      if (d < arriveR) {
         this.moveTargetX = null;
         this.moveTargetY = null;
         this.path = [];
@@ -651,8 +658,18 @@ export class Entity {
     // 兴奋剂增益期移速 ×stimRate（星际式 +50%）。
     const speed = ((this.def.speed ?? 90) / TILE_W) * this.stimRate; // grid/秒
     const step = Math.min(speed * dt, dist - 0.01);
-    this.x += (dx / dist) * step;
-    this.y += (dy / dist) * step;
+    const nx = this.x + (dx / dist) * step;
+    const ny = this.y + (dy / dist) * step;
+    // 防穿：下一位置进入障碍格（完工建筑/资源格）且当前不在该格 → 原地停（贴边）。
+    // 空军豁免（可飞越）；当前已在障碍格内（历史残留，如建筑完工瞬间的工人）放行走出。
+    if (
+      !this.isAir &&
+      isBlocked(Math.floor(nx), Math.floor(ny)) &&
+      !(Math.floor(nx) === Math.floor(this.x) && Math.floor(ny) === Math.floor(this.y))
+    )
+      return;
+    this.x = nx;
+    this.y = ny;
   }
 
   /**

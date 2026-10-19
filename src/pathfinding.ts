@@ -28,12 +28,23 @@ export interface PathCell {
   y: number;
 }
 
+// 动态障碍：完工建筑占地格 + 资源格（矿/气泉）。GameScene 每帧重建写入，
+// A* 寻路与实体直线移动共用 isBlocked 判定，单位不再走进建筑/资源所占格。
+// 未完工建筑不进障碍（工人要进格施工）；空军不做障碍判定（可飞越）。
+let dynamicBlocked: Set<number> = new Set();
+export function setDynamicBlocked(cells: Set<number>) {
+  dynamicBlocked = cells;
+}
+export function isBlocked(x: number, y: number): boolean {
+  return dynamicBlocked.has(y * MAP_COLS + x);
+}
+
 function inBounds(x: number, y: number): boolean {
   return x >= 0 && y >= 0 && x < MAP_COLS && y < MAP_ROWS;
 }
 
 function passable(x: number, y: number): boolean {
-  return inBounds(x, y) && BASE_COST[typeAt(x, y)] !== Infinity;
+  return inBounds(x, y) && BASE_COST[typeAt(x, y)] !== Infinity && !isBlocked(x, y);
 }
 
 function stepCost(x: number, y: number): number {
