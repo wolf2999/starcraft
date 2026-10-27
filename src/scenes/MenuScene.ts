@@ -160,13 +160,13 @@ export class MenuScene extends Phaser.Scene {
     this.root = root;
 
     // 标题（星际式金属蓝大字）+ 副标
-    const title = this.add.text(0, -196, "星 际 争 霸", {
+    const title = this.add.text(0, -196, "S T A R C R A F T", {
       fontFamily: FONT, fontSize: "64px", fontStyle: "bold",
       color: "#cfe0f5", stroke: "#0a1830", strokeThickness: 10,
     }).setOrigin(0.5);
     title.setShadow(0, 5, "#000000", 10, false, true);
     root.add(title);
-    root.add(this.add.text(0, -142, "LOST TEMPLE · 等距抽象重制版", {
+    root.add(this.add.text(0, -142, "LOST TEMPLE", {
       fontFamily: FONT, fontSize: "16px", color: C.dim,
     }).setOrigin(0.5).setLetterSpacing(4));
 
