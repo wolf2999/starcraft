@@ -108,7 +108,76 @@
 
 ---
 
-## 4. 非目标（本期不做）
+## 4. 项目架构
+
+### 4.1 技术栈
+| 层 | 选型 | 说明 |
+|---|---|---|
+| 引擎 | Phaser 4.0.0（ESM） | 只有命名导出，统一 `import * as Phaser` |
+| 语言 | TypeScript | es2020 目标，sourcemap |
+| 构建 | Vite | 端口 5273；phaser alias 到 UMD 构建以兼容 liquidphaser 的 default 导入 |
+| UI 库 | liquidphaser | 训练面板/HUD 的 Liquid UI 组件（需 pinLiquidUI 处理点击命中） |
+| 运行时依赖 | 无后端、无数据库 | 纯前端单机，资源全部运行时生成或打包在 public/ |
+
+### 4.2 目录结构
+```
+starcraft/
+├── src/                    # 游戏源码
+│   ├── main.ts             # 入口：场景链 [MenuScene, GameScene]、DEV 下挂 window.__GAME__
+│   ├── config.ts           # 全部 Def 数据定义（三族 91 个实体数值）、全局常量
+│   ├── entities.ts         # Entity 行为内核：移动/战斗/采集/建造/技能/隐形/死亡状态机
+│   ├── scenes/
+│   │   ├── MenuScene.ts    # 主菜单（对局设置 → scene.start 传 enemies）
+│   │   └── GameScene.ts    # 主场景：输入/生产/AI/迷雾/胜负/特效/面板等系统层
+│   ├── ui/liquidHud.ts     # Liquid UI 挂载（HUD/训练面板/提示）
+│   ├── maps/lostTemple.ts  # 地图数据：地形、出生点、矿区、buildBases 随机布局
+│   ├── terrain.ts / tilemap.ts / iso.ts   # 等距坐标换算、地形定义、逐格铺贴（不用 TilemapLayer）
+│   ├── pathfinding.ts      # A* 网格寻路
+│   ├── Textures.ts         # 程序化像素纹理生成（兜底素材）
+│   ├── animDefs.ts/.json   # 动画帧定义（与 art-src 管线产物对齐）
+│   └── minimap.ts          # 小地图（含迷雾烘焙）
+├── public/
+│   ├── maps/               # lost-temple.tmj（Tiled）+ terrain.png
+│   └── textures/           # 生成的横条 spritesheet 贴图
+├── scripts/                # gen-tileset.mjs / gen-map.mjs（地形图生成链）
+├── art-src/                # 美术源管线（见 3.6 节）
+│   ├── ai-src/             # AI 出图（按 race/tex/动作/帧号 组织）
+│   ├── libresprite/        # 三族 89 个 .ase 工程文件
+│   └── tools/              # ase_dump / ase_anim / ase_fx / ase_preview
+├── debug/extension/        # Phaser Inspector DevTools 扩展
+└── doc/                    # 本文档及其余设计文档
+```
+
+### 4.3 分层架构（运行时）
+```
+输入层  GameScene 指针/键盘 → 指令化（orderMove/Attack/…/tryTrain/tryMorph）
+  ↓
+数据层  config.ts Def（静态数值） + Entity 实例字段（动态状态机）
+  ↓
+行为层  entities.ts 内核（updateCombat/Gather/Build/Transport/Heal… 状态机）
+        + GameScene 系统循环（updateAI/Interceptors/Garrison/Nuke/Fog/Victory…）
+  ↓
+表现层  Tilemap 逐格铺贴 + Entity Container 渲染（depth=1000+x+y 等距排序）
+        + liquidHud UI + minimap + 特效 Graphics（shot/death/fx）
+```
+设计约定：
+- **数据驱动**：种族差异尽量落在 `Def` 字段（cloaked/detects/cargoCapacity/interceptorBay…），代码只写通用机制。
+- **玩家/AI 共用管线**：`tryTrain`/`canPlaceAt` 等校验同一份，AI 只是另一个 owner。
+- **表现与判定分离**：战争迷雾仅作用于表现与选取层，不修改战斗数值。
+- **跨局隔离**：场景实例复用，`init` 时 `resetGameState` 全量清场。
+
+### 4.4 素材构建链
+```
+art-src/ai-src/（关键帧 PNG）──┐
+程序化生成（Textures.ts）──────┼→ scripts/gen-ase.mjs → public/textures 横条
+art-src/libresprite/（.ase）──┘        + .ase 工程 + animDefs.json
+scripts/gen-tileset.mjs / gen-map.mjs → public/maps/（terrain.png + lost-temple.tmj）
+```
+改美术源后重跑对应脚本 + `npm run build` 同步 dist；未知名/缺目录自动回退程序化兜底，保证"零素材可跑"。
+
+---
+
+## 5. 非目标（本期不做）
 
 - **多人联机/存档**：单机 vs AI 为限。
 - **原版素材导入**：出于版权考虑永不打包暴雪素材（用户可自备替换至 `public/assets/`）。
@@ -118,7 +187,7 @@
 
 ---
 
-## 5. 验收标准
+## 6. 验收标准
 
 1. **可玩性**：`npm run dev` 打开 → 主菜单 → 任选 1~3 敌人完整打完一局并出胜负横幅，全程无控制台报错。
 2. **三族完整**：三族单位/建筑按"单位与建筑手册"数值可生产、可战斗；种族特色机制（护盾/幼虫/变异/隐形）生效。
@@ -128,7 +197,7 @@
 
 ---
 
-## 6. 里程碑（历史回溯）
+## 7. 里程碑（历史回溯）
 
 | 里程碑 | 日期 | 内容 |
 |---|---|---|
