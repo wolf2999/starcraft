@@ -10,6 +10,7 @@ import {
 } from "./iso";
 import { typeAt, TerrainType } from "./terrain";
 import { ownerIsAI, Owner, FOG_EXPLORED_ALPHA } from "./config";
+import { HUD_H } from "./ui/liquidHud";
 
 /**
  * 小地图（星际风格，渲染在 Phaser 内、屏幕层固定不随相机滚动）：
@@ -27,7 +28,6 @@ const MM_W = Math.round(MAP_W * MM_SCALE);
 const MM_H = Math.round(MAP_H * MM_SCALE);
 /** 距窗口右/上边缘的留白 */
 const MARGIN = 12;
-
 /** 各地形底图颜色（RGB）；void 虚空 = 近黑底色 */
 const TERRAIN_COLOR: Record<TerrainType, [number, number, number]> = {
   low: [40, 82, 40],
@@ -73,8 +73,13 @@ export class Minimap {
   private fogCanvas: HTMLCanvasElement | null = null;
   private image: Phaser.GameObjects.Image;
   private frame: Phaser.GameObjects.Graphics;
+  private scene: Phaser.Scene;
+  /** 玩家的出生角落（屏幕方位名）。小地图固定放在其“对角”，
+   * 确保无论随机到哪个角，都不会挡住自家基地（相机以玩家基地为中心）。 */
+  private avoidCorner = "右下";
 
   constructor(scene: Phaser.Scene, private cam: Phaser.Cameras.Scene2D.Camera) {
+    this.scene = scene;
     if (scene.textures.exists("minimap")) scene.textures.remove("minimap");
     const tex = scene.textures.createCanvas("minimap", MM_W, MM_H);
     if (!tex) throw new Error("minimap CanvasTexture 创建失败");
@@ -107,10 +112,32 @@ export class Minimap {
     onJump(mx / MM_SCALE, my / MM_SCALE);
   }
 
-  /** 窗口尺寸变化：右上角重排 + 边框重绘（gh 暂未用到：小地图固定贴顶） */
-  layout(gw: number, _gh: number): void {
-    this.x = gw - MM_W - MARGIN;
-    this.y = MARGIN;
+  /** 设置需避让的角落（玩家出生角），小地图自动放到其屏幕对角 */
+  setAvoidCorner(corner: string): void {
+    this.avoidCorner = corner;
+    this.layout(this.scene.scale.gameSize.width, this.scene.scale.gameSize.height);
+  }
+
+  /** 窗口尺寸变化：按避让角放到其“对角” + 边框重绘。
+   * 屏幕四角锚点：左上(MARGIN,MARGIN) 右上(右,上) 左下(左,底上) 右下(右,底上)；
+   * 玩家出生角 → 取对角，保证相机居中玩家基地时小地图不遮挡。 */
+  layout(gw: number, gh: number): void {
+    const right = gw - MM_W - MARGIN;
+    const top = MARGIN;
+    const bottom = gh - MM_H - HUD_H - MARGIN;
+    const left = MARGIN;
+    // 对角映射：左下↔右上、右下↔左上
+    switch (this.avoidCorner) {
+      case "左下":
+        this.x = right; this.y = top; break;
+      case "左上":
+        this.x = right; this.y = bottom; break;
+      case "右下":
+        this.x = left; this.y = top; break;
+      case "右上":
+      default:
+        this.x = left; this.y = bottom; break;
+    }
     this.image.setPosition(this.x, this.y);
     this.frame.clear();
     this.frame.lineStyle(1, 0x5a7a5a, 0.9);

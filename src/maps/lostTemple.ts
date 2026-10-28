@@ -68,6 +68,7 @@ export interface BaseSpawn {
   gy: number;
   owner: Owner;
   defId: string;
+  corner: string;
   units?: { defId: string; dx: number; dy: number }[];
 }
 
@@ -112,8 +113,9 @@ const FACTION_STARTS: Record<string, BaseSpawn> = {
       { defId: "scv", dx: -1, dy: 1 },
       { defId: "scv", dx: 1, dy: 1 },
       { defId: "scv", dx: 2, dy: 0 },
-      { defId: "marine", dx: -1, dy: -1 },
-      { defId: "marine", dx: 1, dy: -1 },
+      // 机枪兵放主建筑占地外（cc 占地 2×2，|dx|>=2 才在格内之外），避免开局站上建筑
+      { defId: "marine", dx: -2, dy: 1 },
+      { defId: "marine", dx: 2, dy: 1 },
     ],
   },
   ai1: {
@@ -152,8 +154,9 @@ const FACTION_STARTS: Record<string, BaseSpawn> = {
       { defId: "scv", dx: -1, dy: 1 },
       { defId: "scv", dx: 1, dy: 1 },
       { defId: "scv", dx: 2, dy: 0 },
-      { defId: "marine", dx: -1, dy: -1 },
-      { defId: "marine", dx: 1, dy: -1 },
+      // 同上：机枪兵放主建筑占地外
+      { defId: "marine", dx: -2, dy: 1 },
+      { defId: "marine", dx: 2, dy: 1 },
     ],
   },
 };
@@ -177,7 +180,7 @@ export function buildBases(enemyCount: number): BaseSpawn[] {
   return factionsFor(enemyCount).map((owner) => {
     const slot = slots.pop()!;
     const tpl = FACTION_STARTS[owner];
-    return { ...tpl, gx: slot.gx, gy: slot.gy };
+    return { ...tpl, gx: slot.gx, gy: slot.gy, corner: slot.corner };
   });
 }
 

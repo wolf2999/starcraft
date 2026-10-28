@@ -254,6 +254,8 @@ export class GameScene extends Phaser.Scene {
   /** 本局敌人数量（MenuScene 选择 1~3）：决定出场 AI 阵营（ai1~aiN）
    * 与四角落出生区随机分配；胜负判定随出场阵营天然适配 */
   enemyCount = 2;
+  /** 玩家本局出生角落（屏幕方位名），用于让小地图避让该角 */
+  playerCorner = "右下";
 
   constructor() {
     super("game");
@@ -382,6 +384,8 @@ export class GameScene extends Phaser.Scene {
 
       // 出生点（基地 + 附属单位）：本局阵营（玩家 + 前 N 个 AI）随机洗到四角落
       const bases = buildBases(this.enemyCount);
+      // 记录玩家出生角，小地图稍后（LiquidUI 就绪时）避让该角，避免挡住自家基地
+      this.playerCorner = bases.find((b) => b.owner === "player")?.corner ?? "右下";
       for (const b of bases) {
         // 每阵营起手资源：50 矿 0 气（星际惯例；中立资源节点不发桶）
         if (b.owner !== "neutral" && !this.resBy[b.owner]) {
@@ -443,6 +447,8 @@ export class GameScene extends Phaser.Scene {
       // 皮肤 png 异步加载：就绪前 updateHud/setStats 调用走空，就绪后立即补一次。
       void initLiquidUI(this).then((ui) => {
         this.liquidUI = ui;
+        // 小地图避让玩家出生角：相机以玩家基地为中心，对角放小地图永不遮挡
+        this.liquidUI.minimap.setAvoidCorner(this.playerCorner);
         this.updateHud();
       });
 
@@ -1675,6 +1681,39 @@ export class GameScene extends Phaser.Scene {
     b.hp = b.maxHp;
     b.sprite.setAlpha(1);
     if (worker) worker.buildTarget = null;
+    // 完工瞬间占地格变为障碍，把恰好站在占地内的地面单位赶到最近可通行格
+    // （否则防穿逻辑虽放行"格内者走出"，但空闲单位会一直留在建筑上）
+    const fp = this.footprintOf(b.def);
+    const x0 = Math.round(b.x - fp / 2);
+    const y0 = Math.round(b.y - fp / 2);
+    for (const e of this.entities) {
+      if (!e.alive || e.isAir || e.def.isBuilding) continue;
+      const ex = Math.floor(e.x);
+      const ey = Math.floor(e.y);
+      if (ex < x0 || ex >= x0 + fp || ey < y0 || ey >= y0 + fp) continue;
+      // 螺旋外扩找最近可通行格（非障碍 + 地形可走）
+      let placed = false;
+      for (let r = 1; r <= 4 && !placed; r++) {
+        for (let dx = -r; dx <= r && !placed; dx++) {
+          for (let dy = -r; dy <= r && !placed; dy++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const nx = ex + dx;
+            const ny = ey + dy;
+            if (typeAt(nx, ny) === "water" || typeAt(nx, ny) === "void") continue;
+            if (this.entities.some(
+              (o) => o.alive && o !== e && !o.def.isBuilding && !o.isAir &&
+                Math.floor(o.x) === nx && Math.floor(o.y) === ny
+            )) continue;
+            e.x = nx + 0.5;
+            e.y = ny + 0.5;
+            e.path = [];
+            e.moveTargetX = null;
+            e.moveTargetY = null;
+            placed = true;
+          }
+        }
+      }
+    }
     this.updateSupply();
     this.updateHud();
   }
@@ -2019,7 +2058,10 @@ export class GameScene extends Phaser.Scene {
       const it = this.spawnFromDef(b.x, b.y, defId, b.owner, true);
       if (it) it.dockIn(b);
     } else {
-      const u = this.spawnFromDef(b.x, b.y + b.r / TILE_W + 0.45, defId, b.owner, true);
+      // 出兵点 = 建筑占地格下缘之外半格（b.r 是贴图半径，对大建筑会落在占地格内，
+      // 导致新兵出生即"站在建筑上"且被障碍格困住）——按 footprintOf 精确算下缘
+      const fp = this.footprintOf(b.def);
+      const u = this.spawnFromDef(b.x, b.y + fp / 2 + 0.45, defId, b.owner, true);
       if (u && defId === "carrier") {
         for (let i = 0; i < CARRIER_START_INTERCEPTORS; i++) {
           const it = this.spawnFromDef(u.x, u.y, "interceptor", u.owner, true);
