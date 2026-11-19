@@ -34,3 +34,9 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Server（战网服务器）
+server/node_modules
+server/dist
+server/config.json        # 含 MySQL root 密码，不入库；从 config.example.json 复制修改
+!server/config.example.json

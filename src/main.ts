@@ -2,6 +2,12 @@ import * as Phaser from "phaser";
 import { MenuScene } from "./scenes/MenuScene";
 import { GameScene } from "./scenes/GameScene";
 import { GAME_WIDTH, GAME_HEIGHT } from "./config";
+import { LANG, t } from "./i18n";
+import type { Race } from "./config";
+
+// 页面语言/标题跟随 i18n 判定结果（index.html 内为默认值）
+document.documentElement.lang = LANG;
+document.title = t("app.title");
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -23,6 +29,22 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+
+// 调试直开：?game=1 跳过主菜单直接进对局（与 GameScene.init 的"调试直开"兼容
+// 缺省一致），可带 ?enemies=3&race=zerg 指定对局参数；无参数时行为完全不变。
+// 也供无头浏览器/自动化验证直接截取对局画面。
+{
+  const p = new URLSearchParams(location.search);
+  if (p.get("game")) {
+    game.events.once(Phaser.Core.Events.READY, () => {
+      game.scene.stop("menu"); // 直接关掉主菜单，避免其叠在对局之上
+      game.scene.start("game", {
+        enemies: Math.trunc(Number(p.get("enemies") ?? 2)) || 2,
+        race: (p.get("race") ?? "terran") as Race,
+      });
+    });
+  }
+}
 
 // 调试钩子：仅在 dev 下把游戏实例挂到 window.__GAME__，
 // 供 debug/overlay.js（独立脚本 / Chrome 扩展）读取并叠加调试层。

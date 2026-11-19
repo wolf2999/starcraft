@@ -9,6 +9,7 @@ import {
 } from "liquidphaser/fl";
 import { LiquidManager, LiquidLabel } from "liquidphaser/liquid";
 import { Minimap } from "../minimap";
+import { t } from "../i18n";
 
 /**
  * Liquid UI 层（liquidphaser 库接入）：
@@ -28,6 +29,8 @@ export interface HudStats {
   supplyProvided: number;
   unitCount: number;
   selCount: number;
+  /** 帧率（game.loop.actualFps 取整；updateHud 节流 150ms 刷新一次足够） */
+  fps: number;
   hint: string;
 }
 
@@ -101,8 +104,9 @@ export async function initLiquidUI(scene: Phaser.Scene): Promise<LiquidUI> {
   const lblSupply = mkLabel(120);
   const lblUnits = mkLabel(120);
   const lblSel = mkLabel(140);
+  const lblFps = mkLabel(90);
   const lblHint = mkLabel(640, true);
-  [lblMineral, lblVespene, lblSupply, lblUnits, lblSel, lblHint].forEach((l) => {
+  [lblMineral, lblVespene, lblSupply, lblUnits, lblSel, lblFps, lblHint].forEach((l) => {
     stage.addChild(l);
     pinLiquidUI(l);
   });
@@ -128,8 +132,9 @@ export async function initLiquidUI(scene: Phaser.Scene): Promise<LiquidUI> {
     lblSupply.position.set(256, ly);
     lblUnits.position.set(382, ly);
     lblSel.position.set(508, ly);
+    lblFps.position.set(652, ly);
     // 提示靠右（右端留小地图宽度的空白由小地图占据上方，底部整条可用）
-    lblHint.position.set(Math.max(660, w - 650), ly);
+    lblHint.position.set(Math.max(760, w - 650), ly);
     // 小地图右上角
     minimap.layout(w, h);
   };
@@ -139,11 +144,12 @@ export async function initLiquidUI(scene: Phaser.Scene): Promise<LiquidUI> {
     stage,
     minimap,
     setStats(s: HudStats): void {
-      lblMineral.text = `矿物 ${s.minerals}`;
-      lblVespene.text = `瓦斯 ${s.vespene}`;
-      lblSupply.text = `人口 ${s.supplyUsed}/${s.supplyProvided}`;
-      lblUnits.text = `我方单位 ${s.unitCount}`;
-      lblSel.text = s.selCount > 0 ? `选中 ${s.selCount}` : "选中 0";
+      lblMineral.text = `${t("hud.minerals")} ${s.minerals}`;
+      lblVespene.text = `${t("hud.vespene")} ${s.vespene}`;
+      lblSupply.text = `${t("hud.supply")} ${s.supplyUsed}/${s.supplyProvided}`;
+      lblUnits.text = `${t("hud.units")} ${s.unitCount}`;
+      lblSel.text = `${t("hud.selected")} ${s.selCount}`;
+      lblFps.text = `${t("hud.fps")} ${s.fps}`;
       lblHint.text = s.hint;
     },
     hitUI(px: number, py: number): boolean {

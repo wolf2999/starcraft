@@ -40,7 +40,8 @@ export type Owner =
   | "ai4"
   | "ai5"
   | "ai6"
-  | "ai7";
+  | "ai7"
+  | "ai8";
 
 /** 是否属于 AI 阵营（区别于玩家与中立） */
 export function ownerIsAI(owner: string): boolean {
@@ -57,11 +58,40 @@ export const OWNER_COLORS: Record<string, number> = {
   ai5: 0x33c9a0, // 青
   ai6: 0xd64a8c, // 粉
   ai7: 0x6ad64a, // 绿
+  ai8: 0xd6894a, // 橙（网络局主机槽位在非主机端的显示色）
 };
 
 /** 取阵营颜色，未知阵营回退白色 */
 export function ownerColor(owner: string): number {
   return OWNER_COLORS[owner] ?? 0xffffff;
+}
+
+/* —— 网络局阵营支持（单机局默认值保证行为不变）——
+ * 主机固定占 slot0 = "player"，其余玩家依次占 ai1..ai7（服务器 start_game.slots 一一对应）。
+ * 单机局：LOCAL_OWNER="player"、NET_TEAMS=null → isFriendly 仅自己+中立同侧，与旧逻辑一致。 */
+
+/** 本端视角的 owner（单机恒为 player；网络局由 GameScene init 按槽位设置） */
+export let LOCAL_OWNER: Owner = "player";
+
+/** 网络局 owner → 阵营（"A"|"B"）映射；null = 单机局 */
+export let NET_TEAMS: Record<string, "A" | "B"> | null = null;
+
+/** 设置本端 owner 与阵营表（GameScene init 网络局时调用） */
+export function setNetContext(localOwner: Owner, teams: Record<string, "A" | "B"> | null): void {
+  LOCAL_OWNER = localOwner;
+  NET_TEAMS = teams;
+}
+
+/** owner 是否友军：自己、或网络局中同阵营（单机局仅自己） */
+export function isFriendly(owner: string): boolean {
+  if (owner === LOCAL_OWNER) return true;
+  if (!NET_TEAMS) return false;
+  return NET_TEAMS[owner] === NET_TEAMS[LOCAL_OWNER];
+}
+
+/** owner 是否敌对（中立既非友军也非敌对；战斗/迷雾/染色按此过滤） */
+export function isHostile(owner: string): boolean {
+  return owner !== "neutral" && !isFriendly(owner);
 }
 
 /**

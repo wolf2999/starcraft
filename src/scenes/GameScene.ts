@@ -52,8 +52,15 @@ import {
   ATTACH_RANGE,
   REPAIR_RATE,
   UPGRADE_KINDS,
+  setNetContext,
+  isFriendly,
+  isHostile,
+  NET_TEAMS,
 } from "../config";
+import type { SlotInfo, SnapEnt } from "../net/client";
+import { net } from "../net/client";
 import { generateAll } from "../Textures";
+import { LANG, defName, t, upgradeName } from "../i18n";
 import {
   TILE_W,
   TILE_H,
@@ -67,18 +74,36 @@ import {
   MAP_H,
   MAP_LEFT,
   MAP_TOP,
+  ORIGIN_X,
+  ORIGIN_Y,
   MAP_COLS,
   MAP_ROWS,
 } from "../iso";
 import { heightAt, typeAt } from "../terrain";
 import { setDynamicBlocked } from "../pathfinding";
 import { buildTerrainTilemap } from "../tilemap";
-import { getLostTemple, buildBases } from "../maps/lostTemple";
+import { getLostTemple, buildBases, START_LOCATIONS, PLAYER_STARTS } from "../maps/lostTemple";
 import { initLiquidUI, pinLiquidUI, HUD_H, type LiquidUI } from "../ui/liquidHud";
 import { LiquidButton, LiquidLabel } from "liquidphaser/liquid";
 import { MouseEvent as LiquidMouseEvent, TextFormat } from "liquidphaser/fl";
 import { ANIM_DEFS } from "../animDefs";
-import type { Def } from "../config";
+import type { Def, Race } from "../config";
+
+/** 迷雾 CanvasTexture 几何：世界 sx ∈ [-HALF_W, MAP_W+HALF_W]、sy ∈ [-ELEV, MAP_TOP+MAP_H+ELEV]
+ * （左右出血=菱形半宽，上下出血=高地抬升/侧壁裙边）；画布原点对应世界坐标 (OX, OY)。
+ * 半分辨率烘焙（0.5×）：迷雾只是纯黑菱形，视觉无差异；纹理上传量降为 1/4，
+ * 软件渲染（无 GPU 加速）环境下整图上传是主要开销，不宜全尺寸。 */
+const FOG_TEX_KEY = "fog-canvas";
+const FOG_SS = 0.5;
+const FOG_CANVAS_W = Math.ceil((MAP_W + HALF_W * 2) * FOG_SS);
+const FOG_CANVAS_H = Math.ceil((MAP_TOP + MAP_H + ELEV * 2) * FOG_SS);
+const FOG_CANVAS_OX = -HALF_W;
+const FOG_CANVAS_OY = -ELEV;
+
+/** 迷雾重绘逐格缓存（每趟重算）：地形高度×2（0/1/2 ↔ 0/0.5/1 级）、
+ * 已探索裙边×2（0/1/2 ↔ 0/8/16px，与下侧两邻格的最大高差） */
+const fogH2 = new Int8Array(MAP_COLS * MAP_ROWS);
+const fogSk = new Int8Array(MAP_COLS * MAP_ROWS);
 
 /** 训练/变异/研究面板按钮项（三类共板；onPanelPick 按 kind 分发） */
 type PanelItem =
@@ -125,8 +150,10 @@ export class GameScene extends Phaser.Scene {
   mapLayer!: Phaser.GameObjects.Container;
   entityLayer!: Phaser.GameObjects.Container;
   uiLayer!: Phaser.GameObjects.Container;
-  /** 战争迷雾覆盖层（世界坐标黑色菱形，depth 4000） */
-  fogGfx!: Phaser.GameObjects.Graphics;
+  /** 战争迷雾覆盖层：整图 CanvasTexture（迷雾只在节流重绘时画进 2D canvas，
+   * 每帧渲染只是贴一张纹理；原 Graphics 即时模式每帧重建 3~5 万绘图命令，是卡顿主因） */
+  fogTex: Phaser.Textures.CanvasTexture | null = null;
+  fogImg!: Phaser.GameObjects.Image;
   /** 迷雾网格：0 未探索 / 1 已探索 / 2 可见（仅玩家视角；AI 无迷雾） */
   fog = new Uint8Array(MAP_COLS * MAP_ROWS);
   private fogTimer = 0;
@@ -220,6 +247,8 @@ export class GameScene extends Phaser.Scene {
     buttons: { btn: any; defId: string }[];
     visible: boolean;
     rect: { x: number; y: number; w: number; h: number };
+    /** 按钮可用态签名：未变化时 refreshBuildPanel 跳过 setStyle/label（脏检查） */
+    sig: string;
   } | null = null;
   /** 幽灵放置状态：null = 未在放置模式 */
   placing: {
@@ -229,10 +258,15 @@ export class GameScene extends Phaser.Scene {
     gx: number;
     gy: number;
     valid: boolean;
+    /** 幽灵红色时的拒绝原因（i18n key，canPlaceAt 返回）——落子点击时 showHint 用 */
+    reason: string | null;
   } | null = null;
   /** 建造面板/幽灵下的资源余额快照（打开面板时刷新按钮可用态用） */
   panelRefreshTick = 0;
-  /** 临时提示文本（被拒绝操作的可见反馈，自动淡出） */
+  /** HUD/面板刷新节拍（秒）：update() 按此频率节流；显式 updateHud() 仍立即刷新 */
+  private hudTimer = 0;
+  /** 小地图刷新节拍（秒）：canvas 重绘 + GPU 纹理上传成本高，100ms 一次足够 */
+  private minimapTimer = 0;
   hintText: Phaser.GameObjects.Text | null = null;
   /** 悬停实体名签（建筑同族轮廓难分辨 → 指针悬停头顶显示名称；仅我方+中立，防迷雾泄密） */
   private hoverEnt: Entity | null = null;
@@ -245,6 +279,8 @@ export class GameScene extends Phaser.Scene {
     /** 面板标题（建筑名 + 造兵入口提示） */
     title: any;
     rect: { x: number; y: number; w: number; h: number };
+    /** 按钮可用态签名：未变化时 refreshTrainPanel 跳过 setStyle/label（脏检查） */
+    sig: string;
   } | null = null;
   /** 科技升级等级（按阵营分桶：kind→level；Entity.attackBonus/armorLevel 消费） */
   upgradesBy: Record<string, Record<string, number>> = {};
@@ -254,21 +290,82 @@ export class GameScene extends Phaser.Scene {
   /** 本局敌人数量（MenuScene 选择 1~3）：决定出场 AI 阵营（ai1~aiN）
    * 与四角落出生区随机分配；胜负判定随出场阵营天然适配 */
   enemyCount = 2;
+  /** 玩家本局种族（MenuScene 选择，默认人族）：决定出生模板（主基地/农民/初始兵） */
+  playerRace: Race = "terran";
   /** 玩家本局出生角落（屏幕方位名），用于让小地图避让该角 */
   playerCorner = "右下";
+
+  // —— 网络对战（单机局全为默认值，行为不变）——
+  /** 是否网络对战局（MenuScene 战网 start_game 进入） */
+  isNetGame = false;
+  /** 本端是否主机（主机跑完整模拟，其余端只渲染快照） */
+  isNetHost = true;
+  /** 本端战网 uid */
+  myUid = 0;
+  /** 开局槽位（start_game 下发；slot0=主机） */
+  netSlots: SlotInfo[] = [];
+  /** 网络局中其他真人玩家的 display owner（AI 经济/快照过滤据此跳过） */
+  humanNetOwners = new Set<string>();
+  /** 指令序号（非主机发 cmd 用，主机按 seq 去重） */
+  cmdSeq = 0;
+  /** 主机快照广播定时器（setInterval 100ms；后台标签页 RAF 冻结仍以 ≥1Hz 兜底） */
+  private snapIv = 0;
+  private snapTick = 0;
 
   constructor() {
     super("game");
   }
 
-  /** 场景启动参数（MenuScene 经 scene.start 传入 { enemies }）；
-   * 缺省 2 兼容调试直开（浏览器地址直达无菜单时仍有对局可玩） */
-  init(data: { enemies?: number }) {
+  /** 场景启动参数（MenuScene 经 scene.start 传入 { enemies, race } 或战网 { net, seed, slots, myUid }）；
+   * 缺省 2 / terran 兼容调试直开（浏览器地址直达无菜单时仍有对局可玩） */
+  init(data: {
+    enemies?: number;
+    race?: Race;
+    net?: boolean;
+    seed?: number;
+    slots?: SlotInfo[];
+    myUid?: number;
+  }) {
     // 场景实例跨局复用（菜单↔游戏可反复进出）：先清空上一局全部对局期状态，
     // 再记录本局敌人数量——否则 resBy/aiOwners/entities 等残留会让胜负判定
     // 把上一局阵营也计入（空阵营恒全灭 → 开局误判胜利）。
     this.resetGameState();
     this.enemyCount = Math.min(3, Math.max(1, Math.trunc(data?.enemies ?? 2)));
+    this.playerRace = data?.race ?? "terran";
+
+    // —— 网络局：解析槽位、建立 display owner ↔ 阵营映射 ——
+    // 客户端统一视角：自己恒为 "player"，其余槽位显示为 aiN（主机槽位0 显示为 ai8），
+    // 这样本端选择/面板/操控的 owner==="player" 判定无需改动。
+    this.isNetGame = !!data?.net;
+    this.isNetHost = true;
+    this.myUid = 0;
+    this.netSlots = [];
+    this.humanNetOwners.clear();
+    if (this.isNetGame && data.slots?.length) {
+      this.netSlots = data.slots;
+      this.myUid = data.myUid ?? 0;
+      const mySlot = this.netSlots.find((s) => s.uid === this.myUid)?.slot ?? 0;
+      this.isNetHost = mySlot === 0;
+      const teams: Record<string, "A" | "B"> = {};
+      for (const s of this.netSlots) {
+        const display = this.slotToOwner(s.slot, mySlot);
+        teams[display] = s.team;
+        if (s.slot !== mySlot) this.humanNetOwners.add(display);
+      }
+      setNetContext("player", teams);
+      // 本端种族以槽位为准（战网房间内选择的种族）
+      const mine = this.netSlots.find((s) => s.uid === this.myUid);
+      if (mine) this.playerRace = mine.race;
+    } else {
+      setNetContext("player", null);
+    }
+  }
+
+  /** 槽位 → 本端显示 owner：自己=player；主机槽位0=ai8；其余=aiN（与槽位号一致） */
+  private slotToOwner(slot: number, mySlot: number): Owner {
+    if (slot === mySlot) return "player";
+    if (slot === 0) return "ai8";
+    return (`ai${slot}`) as Owner;
   }
 
   /** 重置全部对局期实例状态（init 调用；显示对象由场景 shutdown 销毁、create 重建） */
@@ -311,6 +408,12 @@ export class GameScene extends Phaser.Scene {
     this.buildPanel = null;
     this.placing = null;
     this.selSig = "";
+    this.isNetGame = false;
+    this.isNetHost = true;
+    this.myUid = 0;
+    this.netSlots = [];
+    this.humanNetOwners.clear();
+    this.cmdSeq = 0;
   }
 
   preload() {
@@ -345,14 +448,25 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     try {
+      // 调试直开（?game=1）：main.ts 的 READY 钩子早于场景自动启动队列触发，
+      // start("game") 后 MenuScene 才被自动启动并盖在对局之上——这里补停菜单
+      // （正常菜单流程中菜单已自行停止，isActive 为 false 无副作用）。
+      if (this.scene.isActive("menu")) this.scene.stop("menu");
       // 分层容器：地图层(底) / 单位层(中) / UI 层(顶)。必须在其它对象创建前建立。
       this.mapLayer = this.add.container(0, 0).setDepth(-1000);
       this.entityLayer = this.add.container(0, 0).setDepth(0);
       this.uiLayer = this.add.container(0, 0).setDepth(1000);
 
-      // 战争迷雾覆盖层（世界坐标黑色菱形）：depth 高于实体/特效、低于小地图
-      // (5000) 与屏幕面板。此时尚未出兵，create 末尾出兵完毕后再重算可见集。
-      this.fogGfx = this.add.graphics().setDepth(4000);
+      // 战争迷雾覆盖层：整图 CanvasTexture（世界坐标 1:1 贴图，depth 高于实体/特效、
+      // 低于小地图 (5000) 与屏幕面板）。画布四周留出血覆盖高地抬升与侧壁裙边；
+      // 场景跨局复用 → 先移除旧纹理键再重建。create 末尾出兵完毕后再重算可见集。
+      if (this.textures.exists(FOG_TEX_KEY)) this.textures.remove(FOG_TEX_KEY);
+      this.fogTex = this.textures.createCanvas(FOG_TEX_KEY, FOG_CANVAS_W, FOG_CANVAS_H);
+      this.fogImg = this.add
+        .image(FOG_CANVAS_OX, FOG_CANVAS_OY, FOG_TEX_KEY)
+        .setOrigin(0, 0)
+        .setScale(1 / FOG_SS)
+        .setDepth(4000);
 
       // 蜘蛛雷标记层（fx 层级：己方雷画标记，敌方雷隐形）
       this.mineGfx = this.add.graphics().setDepth(3000);
@@ -379,30 +493,53 @@ export class GameScene extends Phaser.Scene {
       // 并由瓦片 gid 反推地形网格供寻路/出生点使用
       buildTerrainTilemap(this, this.mapLayer);
 
-      // 资源节点
-      map.resources.forEach((r) => this.spawnResource(r.kind, r.gx, r.gy));
+      // 非主机镜像端：本地不生成任何世界实体（资源/基地全部来自主机快照），
+      // 只推出生角给小地图避让与相机对焦；胜负由主机 game_over 广播决定
+      const isMirror = this.isNetGame && !this.isNetHost;
+      /** 玩家出生格（相机初始对焦；镜像端按槽位推，其余端取玩家基地） */
+      let mySpawnLoc: { gx: number; gy: number } | null = null;
+      if (!isMirror) {
+        // 资源节点
+        map.resources.forEach((r) => this.spawnResource(r.kind, r.gx, r.gy));
 
-      // 出生点（基地 + 附属单位）：本局阵营（玩家 + 前 N 个 AI）随机洗到四角落
-      const bases = buildBases(this.enemyCount);
-      // 记录玩家出生角，小地图稍后（LiquidUI 就绪时）避让该角，避免挡住自家基地
-      this.playerCorner = bases.find((b) => b.owner === "player")?.corner ?? "右下";
-      for (const b of bases) {
-        // 每阵营起手资源：50 矿 0 气（星际惯例；中立资源节点不发桶）
-        if (b.owner !== "neutral" && !this.resBy[b.owner]) {
-          this.resBy[b.owner] = { minerals: 50, vespene: 0 };
-        }
-        this.spawnFromDef(b.gx, b.gy, b.defId, b.owner, true);
-        if (b.units) {
-          for (const u of b.units) {
-            this.spawnFromDef(b.gx + u.dx, b.gy + u.dy, u.defId, b.owner);
+        // 出生点（基地 + 附属单位）：单机局随机洗四角；网络局按 start_game 槽位
+        // 确定性分配四角（两端一致，不依赖随机）
+        const bases = this.isNetGame ? this.buildNetBases() : buildBases(this.enemyCount, this.playerRace);
+        // 记录玩家出生角，小地图稍后（LiquidUI 就绪时）避让该角，避免挡住自家基地
+        this.playerCorner = bases.find((b) => b.owner === "player")?.corner ?? "右下";
+        mySpawnLoc = bases.find((b) => b.owner === "player") ?? null;
+        for (const b of bases) {
+          // 每阵营起手资源：50 矿 0 气（星际惯例；中立资源节点不发桶）
+          if (b.owner !== "neutral" && !this.resBy[b.owner]) {
+            this.resBy[b.owner] = { minerals: 50, vespene: 0 };
+          }
+          this.spawnFromDef(b.gx, b.gy, b.defId, b.owner, true);
+          if (b.units) {
+            for (const u of b.units) {
+              this.spawnFromDef(b.gx + u.dx, b.gy + u.dy, u.defId, b.owner);
+            }
           }
         }
+
+        this.updateSupply();
+
+        // 胜负判定：出场敌对阵营快照（此后只减不增；resBy 桶死亡后仍在，不作存活依据）。
+        // 单机局=全部 AI；网络局=其余玩家槽位（display owner 同为 ai* 前缀）
+        this.aiOwners = Object.keys(this.resBy).filter(isHostile);
+      } else {
+        this.playerCorner = this.netMySpawn().corner;
       }
 
-      this.updateSupply();
+      // 网络局：注册对局期消息（快照/指令/断线/结算；覆盖 MenuScene 的房间期处理器）
+      if (this.isNetGame) this.registerNetHandlers();
 
-      // 胜负判定：出场 AI 阵营快照（此后只减不增；resBy 桶死亡后仍在，不作存活依据）
-      this.aiOwners = Object.keys(this.resBy).filter(ownerIsAI);
+      // 主机：周期性广播权威快照。用 setInterval 而非 update 驱动——浏览器后台
+      // 标签页 RAF 冻结会停掉 update（切到镜像端时主机停播，镜像端永远空场），
+      // 定时器在后台仍以 ≥1Hz 节流兜底，保证镜像端任何时候激活都有实体可渲染
+      if (this.isNetGame && this.isNetHost) {
+        this.snapIv = window.setInterval(() => this.broadcastSnapshot(), 100);
+        this.events.once("shutdown", () => window.clearInterval(this.snapIv));
+      }
 
       // 战争迷雾：按出生点重算一次可见集（开局基地周边点亮，其余全黑；
       // 敌方基地/单位随迷雾隐藏），并首次重绘覆盖层
@@ -417,9 +554,10 @@ export class GameScene extends Phaser.Scene {
       // minZoom 自动放大撑满，仍不露黑边——见 iso.ts 与下方 resize 监听）。
       const gw = this.scale.gameSize.width;
       const gh = this.scale.gameSize.height;
-      const playerBase = bases.find((b) => b.owner === "player");
-      const focus = playerBase
-        ? worldToScreen(playerBase.gx, playerBase.gy)
+      // 镜像端：本地无基地实体，按槽位推出生点对焦；其余端找玩家基地
+      const focusLoc = mySpawnLoc ?? (isMirror ? this.netMySpawn() : null);
+      const focus = focusLoc
+        ? worldToScreen(focusLoc.gx, focusLoc.gy)
         : { sx: gw / 2, sy: gh / 2 };
       cam.setZoom(Math.max(1, minZoom(gw, gh)));
       // Phaser 4 RESIZE 下 camera.width/height 恒 0（框架未自动同步），
@@ -462,6 +600,8 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard?.on("keydown-B", () => this.toggleBuildPanel());
       // E：攻城模式切换（选中的 tank 展开成攻城态/收起，原地待命）
       this.input.keyboard?.on("keydown-E", () => {
+        // 镜像端：改发主机回放（本端不作本地攻城切换）
+        if (this.emitNetCmd({ kind: "siege", ids: this.selection.map((e) => e.id) })) return;
         let n = 0;
         let siegedNow = false;
         for (const e of this.selection) {
@@ -470,7 +610,7 @@ export class GameScene extends Phaser.Scene {
             n++;
           }
         }
-        if (n > 0) this.showHint(siegedNow ? "坦克展开攻城模式" : "坦克收起攻城模式");
+        if (n > 0) this.showHint(siegedNow ? t("hint.siegeOn") : t("hint.siegeOff"));
       });
       // Y：大和炮瞄准态（选中的 battlecruiser，能量足够时进入指定目标模式）
       this.input.keyboard?.on("keydown-Y", () => {
@@ -478,11 +618,11 @@ export class GameScene extends Phaser.Scene {
         if (!bc) return;
         const cost = bc.def.yamatoCost ?? 150;
         if (bc.energy < cost) {
-          this.showHint(`能量不足（需 ${cost}，当前 ${Math.floor(bc.energy)}）`);
+          this.showHint(t("hint.noEnergyCurrent", { cost, cur: Math.floor(bc.energy) }));
           return;
         }
         this.yamatoCaster = bc;
-        this.showHint("大和炮：左键指定敌方目标（右键取消）");
+        this.showHint(t("hint.yamatoAim"));
       });
       // U：卸载（选中的运输机/碉堡原地放下全部乘客）
       this.input.keyboard?.on("keydown-U", () => {
@@ -492,10 +632,12 @@ export class GameScene extends Phaser.Scene {
             n += e.unloadAll();
           }
         }
-        if (n > 0) this.showHint(`已卸载 ${n} 名乘客`);
+        if (n > 0) this.showHint(t("hint.unloaded", { n }));
       });
       // T：兴奋剂（选中的 marine/firebat，自伤 10 HP 换攻速/移速 +50% 持续 15s）
       this.input.keyboard?.on("keydown-T", () => {
+        // 镜像端：改发主机回放
+        if (this.emitNetCmd({ kind: "stim", ids: this.selection.map((e) => e.id) })) return;
         let n = 0;
         let denied = 0;
         for (const e of this.selection) {
@@ -509,38 +651,39 @@ export class GameScene extends Phaser.Scene {
           e.stimTimer = STIM_DURATION;
           n++;
         }
-        if (n > 0) this.showHint("兴奋剂：攻速/移速提升 50%");
-        else if (denied > 0) this.showHint("生命值不足，无法施放兴奋剂");
+        if (n > 0) this.showHint(t("hint.stim"));
+        else if (denied > 0) this.showHint(t("hint.stimNoHp"));
       });
       // L：锁定（选中的 ghost，能量足够时进入指定目标模式）
       this.input.keyboard?.on("keydown-L", () => {
         const g = this.selection.find((e) => e.alive && e.owner === "player" && e.def.id === "ghost");
         if (!g) return;
         if (g.energy < LOCKDOWN_COST) {
-          this.showHint(`能量不足（需 ${LOCKDOWN_COST}，当前 ${Math.floor(g.energy)}）`);
+          this.showHint(t("hint.noEnergyCurrent", { cost: LOCKDOWN_COST, cur: Math.floor(g.energy) }));
           return;
         }
         this.lockdownCaster = g;
-        this.showHint("锁定：左键指定敌方机械单位（右键取消）");
+        this.showHint(t("hint.lockdownAim"));
       });
       // N：核弹（选中的 ghost + 科学站建成 + 装填完毕 → 指定打击地点）
       this.input.keyboard?.on("keydown-N", () => {
         const g = this.selection.find((e) => e.alive && e.owner === "player" && e.def.id === "ghost");
         if (!g) return;
         if (!this.hasConstructed("player", NUKE_REQUIRES)) {
-          this.showHint(`需要${ALL_DEFS[NUKE_REQUIRES]?.name ?? NUKE_REQUIRES}（核弹科技）`);
+          const nukeDef = ALL_DEFS[NUKE_REQUIRES];
+          this.showHint(t("hint.needNuke", { name: nukeDef ? defName(nukeDef) : NUKE_REQUIRES }));
           return;
         }
         if (this.nukeGhost) {
-          this.showHint("核弹已在引导中");
+          this.showHint(t("hint.nukeGuiding"));
           return;
         }
         if (this.nukeCooldown > 0) {
-          this.showHint(`核弹装填中（剩余 ${Math.ceil(this.nukeCooldown / 1000)}s）`);
+          this.showHint(t("hint.nukeReload", { s: Math.ceil(this.nukeCooldown / 1000) }));
           return;
         }
         this.nukeGhost = g;
-        this.showHint("核弹：左键指定打击地点（右键取消）");
+        this.showHint(t("hint.nukeAim"));
       });
       // M：布雷（选中的 vulture 脚下埋蜘蛛雷，携雷用完为止，不自动补充）
       this.input.keyboard?.on("keydown-M", () => {
@@ -558,29 +701,29 @@ export class GameScene extends Phaser.Scene {
           });
           n++;
         }
-        if (n > 0) this.showHint("蜘蛛雷已埋设");
+        if (n > 0) this.showHint(t("hint.minePlanted"));
       });
       // S：灵能风暴瞄准态（选中的 ht，能量足够时进入落点指定模式）
       this.input.keyboard?.on("keydown-S", () => {
         const ht = this.selection.find((e) => e.alive && e.owner === "player" && e.def.storm);
         if (!ht) return;
         if (ht.energy < STORM_COST) {
-          this.showHint(`能量不足（需 ${STORM_COST}，当前 ${Math.floor(ht.energy)}）`);
+          this.showHint(t("hint.noEnergyCurrent", { cost: STORM_COST, cur: Math.floor(ht.energy) }));
           return;
         }
         this.stormCaster = ht;
-        this.showHint("风暴：左键指定落点（右键取消）");
+        this.showHint(t("hint.stormAim"));
       });
       // C：精神控制瞄准态（选中的 darkarchon，能量足够时进入目标指定模式）
       this.input.keyboard?.on("keydown-C", () => {
         const da = this.selection.find((e) => e.alive && e.owner === "player" && e.def.mindControl);
         if (!da) return;
         if (da.energy < MIND_CONTROL_COST) {
-          this.showHint(`能量不足（需 ${MIND_CONTROL_COST}，当前 ${Math.floor(da.energy)}）`);
+          this.showHint(t("hint.noEnergyCurrent", { cost: MIND_CONTROL_COST, cur: Math.floor(da.energy) }));
           return;
         }
         this.mindCtlCaster = da;
-        this.showHint("精神控制：左键指定敌方单位（右键取消）");
+        this.showHint(t("hint.mcAim"));
       });
       // 编队：Ctrl+1~9 保存玩家选区快照 / 1~9 选中编队 / 双击同键相机居中编队
       const GROUP_KEY_NAMES = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
@@ -600,7 +743,7 @@ export class GameScene extends Phaser.Scene {
         // 核弹仅在瞄准态可取消；已发射进入引导后不可中断（星际式）
         if (this.nukeGhost && this.nukeTimer <= 0) {
           this.nukeGhost = null;
-          this.showHint("已取消核弹");
+          this.showHint(t("hint.nukeCancelled"));
         }
         this.clearSelection();
         this.closeTrainPanel();
@@ -716,7 +859,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     // 迷雾内出生的敌方实体立即隐藏（否则要等下一个迷雾 tick 才隐藏，出现闪烁）
-    if (ownerIsAI(owner)) {
+    if (isHostile(owner)) {
       e.container.visible = this.fogStateAt(x, y) >= 2;
     }
 
@@ -838,7 +981,7 @@ export class GameScene extends Phaser.Scene {
       const caster = this.yamatoCaster;
       if (p.rightButtonDown()) {
         this.yamatoCaster = null;
-        this.showHint("已取消大和炮");
+        this.showHint(t("hint.yamatoCancelled"));
         return;
       }
       if (p.leftButtonDown()) {
@@ -855,9 +998,10 @@ export class GameScene extends Phaser.Scene {
         }
         this.yamatoCaster = null;
         if (!target) {
-          this.showHint("已取消大和炮");
+          this.showHint(t("hint.yamatoCancelled"));
           return;
         }
+        if (this.emitNetCmd({ kind: "yamato", c: caster.id, t: target.id })) return;
         this.fireYamato(caster, target);
         return;
       }
@@ -868,7 +1012,7 @@ export class GameScene extends Phaser.Scene {
       const caster = this.lockdownCaster;
       if (p.rightButtonDown()) {
         this.lockdownCaster = null;
-        this.showHint("已取消锁定");
+        this.showHint(t("hint.lockdownCancelled"));
         return;
       }
       if (p.leftButtonDown()) {
@@ -885,9 +1029,10 @@ export class GameScene extends Phaser.Scene {
         }
         this.lockdownCaster = null;
         if (!target) {
-          this.showHint("已取消锁定");
+          this.showHint(t("hint.lockdownCancelled"));
           return;
         }
+        if (this.emitNetCmd({ kind: "lockdown", c: caster.id, t: target.id })) return;
         this.fireLockdown(caster, target);
         return;
       }
@@ -898,12 +1043,13 @@ export class GameScene extends Phaser.Scene {
       const ghost = this.nukeGhost;
       if (p.rightButtonDown()) {
         this.nukeGhost = null;
-        this.showHint("已取消核弹");
+        this.showHint(t("hint.nukeCancelled"));
         return;
       }
       if (p.leftButtonDown()) {
         const w = screenToWorld(p.worldX, p.worldY);
         this.nukeGhost = null;
+        if (this.emitNetCmd({ kind: "nuke", c: ghost.id, x: w.wx, y: w.wy })) return;
         this.launchNuke(ghost, w.wx, w.wy);
         return;
       }
@@ -914,16 +1060,17 @@ export class GameScene extends Phaser.Scene {
       const caster = this.stormCaster;
       if (p.rightButtonDown()) {
         this.stormCaster = null;
-        this.showHint("已取消风暴");
+        this.showHint(t("hint.stormCancelled"));
         return;
       }
       if (p.leftButtonDown()) {
         const w = screenToWorld(p.worldX, p.worldY);
         if (Phaser.Math.Distance.Between(caster.x, caster.y, w.wx, w.wy) > STORM_RANGE) {
-          this.showHint("超出施法距离（风暴）");
+          this.showHint(t("hint.stormOutOfRange"));
           return; // 保持瞄准态，让玩家点近处（星际式：单位走近再放此处简化）
         }
         this.stormCaster = null;
+        if (this.emitNetCmd({ kind: "storm", c: caster.id, x: w.wx, y: w.wy })) return;
         this.castStorm(caster, w.wx, w.wy);
         return;
       }
@@ -934,7 +1081,7 @@ export class GameScene extends Phaser.Scene {
       const caster = this.mindCtlCaster;
       if (p.rightButtonDown()) {
         this.mindCtlCaster = null;
-        this.showHint("已取消精神控制");
+        this.showHint(t("hint.mcCancelled"));
         return;
       }
       if (p.leftButtonDown()) {
@@ -950,10 +1097,11 @@ export class GameScene extends Phaser.Scene {
           }
         }
         if (!target) {
-          this.showHint("已取消精神控制");
+          this.showHint(t("hint.mcCancelled"));
           return;
         }
         this.mindCtlCaster = null;
+        if (this.emitNetCmd({ kind: "mc", c: caster.id, t: target.id })) return;
         this.fireMindControl(caster, target);
         return;
       }
@@ -972,9 +1120,11 @@ export class GameScene extends Phaser.Scene {
     if (this.attackMoveMode) {
       // 攻击移动：把屏幕点击反投影成世界坐标
       const w = screenToWorld(p.worldX, p.worldY);
-      this.selection.forEach((e) => {
-        if (!e.def.isBuilding) e.attackMoveTo(w.wx, w.wy);
-      });
+      if (!this.emitNetCmd({ kind: "am", ids: this.selection.map((e) => e.id), x: w.wx, y: w.wy })) {
+        this.selection.forEach((e) => {
+          if (!e.def.isBuilding) e.attackMoveTo(w.wx, w.wy);
+        });
+      }
       this.attackMoveMode = false;
       this.attackMoveCursor.clear();
       return;
@@ -1074,17 +1224,17 @@ export class GameScene extends Phaser.Scene {
         .setDepth(6000);
       this.uiLayer.add(this.hoverName);
     }
-    const t = this.hoverName;
+    const label = this.hoverName;
     const e = this.hoverEnt;
     if (!e || !e.alive) {
-      if (t.visible) t.setVisible(false);
+      if (label.visible) label.setVisible(false);
       this.hoverEnt = null;
       return;
     }
     const es = worldToScreen(e.x, e.y, heightAt(e.x, e.y));
-    t.setText(e.def.name + (e.constructed ? "" : "（建造中）"));
-    t.setPosition(es.sx, es.sy - e.sprite.displayHeight / 2 - 10);
-    if (!t.visible) t.setVisible(true);
+    label.setText(defName(e.def) + (e.constructed ? "" : t("ui.building")));
+    label.setPosition(es.sx, es.sy - e.sprite.displayHeight / 2 - 10);
+    if (!label.visible) label.setVisible(true);
   }
 
   onPointerUp(p: Phaser.Input.Pointer) {
@@ -1162,8 +1312,15 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 右键世界指令：镜像端打包发主机回放；本机/主机直接执行 */
   commandRightClick(wx: number, wy: number) {
-    for (const e of this.selection) {
+    if (this.emitNetCmd({ kind: "rc", ids: this.selection.map((e) => e.id), x: wx, y: wy })) return;
+    this.applyRightClick(this.selection, wx, wy);
+  }
+
+  /** 右键语义（本地执行；主机收到远端 rc 指令也走这里回放） */
+  private applyRightClick(ents: Entity[], wx: number, wy: number) {
+    for (const e of ents) {
       if (e.def.isBuilding) continue;
       // 任何新指令都取消进行中的建造
       e.buildTarget = null;
@@ -1205,7 +1362,7 @@ export class GameScene extends Phaser.Scene {
             e.orderGarrison(bk);
             e.buildTarget = null;
           } else {
-            this.showHint("碉堡已满（4）");
+            this.showHint(t("hint.bunkerFull"));
           }
           continue;
         }
@@ -1334,7 +1491,7 @@ export class GameScene extends Phaser.Scene {
     const stage = this.liquidUI.stage;
     const gh = this.scale.gameSize.height;
     const cols = 6;
-    const bw = 96;
+    const bw = LANG === "en" ? 140 : 96;
     const bh = 24;
     const gapX = 8;
     const gapY = 6;
@@ -1350,8 +1507,8 @@ export class GameScene extends Phaser.Scene {
         const col = i % cols;
         const row = Math.floor(i / cols);
         const btn = new LiquidButton();
-        btn.label = `${def.name} ${def.minerals}`;
-        btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, 0xd8ffe6));
+        btn.label = `${defName(def)} ${def.minerals}`;
+        btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", LANG === "en" ? 11 : 12, 0xd8ffe6));
         btn.setSize(bw, bh);
         btn.position.set(x0 + col * (bw + gapX), y0 + row * (bh + gapY));
         btn.addEventListener(LiquidMouseEvent.CLICK, () => this.onBuildPick(defId));
@@ -1367,6 +1524,7 @@ export class GameScene extends Phaser.Scene {
       buttons,
       visible: true,
       rect: { x: x0 - 4, y: y0 - 4, w: cols * (bw + gapX), h: rows * (bh + gapY) + 8 },
+      sig: "",
     };
     this.refreshBuildPanel();
   }
@@ -1395,19 +1553,29 @@ export class GameScene extends Phaser.Scene {
     return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
   }
 
-  /** 余额变化时刷新按钮可用态（买不起置灰）——updateHud 节流调用 */
+  /** 余额变化时刷新按钮可用态（买不起置灰）——updateHud 节流调用。
+   * 先算出各按钮目标态拼签名，与上次一致则整批跳过（原实现每次调用都
+   * new TextFormat ×N 并重设 label → 每秒上千次样式重设与短命对象分配）。 */
   refreshBuildPanel() {
     const panel = this.buildPanel;
     if (!panel) return;
+    let sig = "";
+    const targets: { btn: any; label: string; ok: boolean }[] = [];
     for (const b of panel.buttons) {
       const def = ALL_DEFS[b.defId];
       if (!def) continue;
       const ok = this.minerals >= def.minerals && this.vespene >= def.vespene;
       // 皮肤就绪时 LiquidButton 文字色跟随皮肤（同 LiquidLabel 库级行为），setStyle 置灰可能不可见；
       // 改标签内容做“买不起”标记（文本内容不会被皮肤覆盖）
-      const base = `${def.name} ${def.minerals}`;
-      b.btn.label = ok ? base : `${base} ×`;
-      b.btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, ok ? 0xd8ffe6 : 0x66766d));
+      const base = `${defName(def)} ${def.minerals}`;
+      targets.push({ btn: b.btn, label: ok ? base : `${base} ×`, ok });
+      sig += `${base}:${ok ? 1 : 0};`;
+    }
+    if (sig === panel.sig) return;
+    panel.sig = sig;
+    for (const t of targets) {
+      t.btn.label = t.label;
+      t.btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", LANG === "en" ? 11 : 12, t.ok ? 0xd8ffe6 : 0x66766d));
     }
   }
 
@@ -1449,8 +1617,8 @@ export class GameScene extends Phaser.Scene {
       // 此前静默 return → 用户视角“点了没反应”。给出可见反馈（红色提示，自动淡出）
       const lack =
         this.minerals < def.minerals
-          ? `矿物不足：需要 ${def.minerals}（现有 ${this.minerals}）`
-          : `瓦斯不足：需要 ${def.vespene}（现有 ${this.vespene}）`;
+          ? t("hint.noMinerals", { need: def.minerals, have: this.minerals })
+          : t("hint.noVespene", { need: def.vespene, have: this.vespene });
       console.log("[build] pick 拒绝", defId, lack);
       this.showHint(lack);
       return;
@@ -1472,7 +1640,7 @@ export class GameScene extends Phaser.Scene {
       .setAlpha(0.55)
       .setDepth(5080);
     const ring = this.add.graphics().setDepth(5079);
-    this.placing = { defId, ghost, ring, gx: -999, gy: -999, valid: false };
+    this.placing = { defId, ghost, ring, gx: -999, gy: -999, valid: false, reason: null };
   }
 
   exitPlacing() {
@@ -1497,7 +1665,9 @@ export class GameScene extends Phaser.Scene {
     const gy = Math.round(w.wy - fp / 2);
     pl.gx = gx;
     pl.gy = gy;
-    pl.valid = this.canPlaceAt(gx, gy, def);
+    const reason = this.canPlaceAt(gx, gy, def);
+    pl.valid = reason === null;
+    pl.reason = reason;
     // 以占地中心格的地形高度画（跨高差时避免四角参差）
     const cx = gx + fp / 2;
     const cy = gy + fp / 2;
@@ -1523,25 +1693,26 @@ export class GameScene extends Phaser.Scene {
     ring.strokePath();
   }
 
-  /** 放置合法性：地图范围 / 地形（仅 low/high/bridge）/ 占地高差 ≤0.6 / 实体重叠 / 精炼厂绑气泉 / 附属绑主建筑 */
-  canPlaceAt(gx: number, gy: number, def: Def): boolean {
+  /** 放置合法性检查：null=可放，否则返回拒绝原因的 i18n key（幽灵红色 + 落子拒绝提示共用）。
+   * 检查项：地图范围 / 地形（仅 low/high/bridge）/ 占地高差 ≤0.6 / 实体重叠 / 精炼厂绑气泉 / 附属绑主建筑 */
+  canPlaceAt(gx: number, gy: number, def: Def): string | null {
     const fp = this.footprintOf(def);
     // 附属建筑专属校验：地形 + 高差 + 必须建在 attachOf 主建筑（存活已建成）ATTACH_RANGE 内，
     // 且该主建筑旁无同类附属；跳过通用重叠检查（贴主建筑放置必然与其碰撞圈相交，星际式贴建）
     if (def.attachment) {
-      if (gx < 0 || gy < 0 || gx + fp > MAP_COLS || gy + fp > MAP_ROWS) return false;
+      if (gx < 0 || gy < 0 || gx + fp > MAP_COLS || gy + fp > MAP_ROWS) return "hint.buildOob";
       let hMinA = Infinity;
       let hMaxA = -Infinity;
       for (let x = gx; x < gx + fp; x++) {
         for (let y = gy; y < gy + fp; y++) {
           const t = typeAt(x, y);
-          if (t !== "low" && t !== "high" && t !== "bridge") return false;
+          if (t !== "low" && t !== "high" && t !== "bridge") return "hint.buildTerrain";
           const h = heightAt(x, y);
           if (h < hMinA) hMinA = h;
           if (h > hMaxA) hMaxA = h;
         }
       }
-      if (hMaxA - hMinA > 0.6) return false;
+      if (hMaxA - hMinA > 0.6) return "hint.buildSlope";
       const cx = gx + fp / 2;
       const cy = gy + fp / 2;
       const host = this.entities.find(
@@ -1552,31 +1723,33 @@ export class GameScene extends Phaser.Scene {
           e.owner === "player" &&
           Phaser.Math.Distance.Between(cx, cy, e.x, e.y) <= ATTACH_RANGE
       );
-      if (!host) return false;
+      if (!host) return "hint.buildNeedHost";
       // 每主建筑同类附属限一座（host 2.2 格内已有同类即占用）
-      return !this.entities.some(
+      return this.entities.some(
         (e) =>
           e.alive &&
           e.def.attachment &&
           e.def.id === def.id &&
           Phaser.Math.Distance.Between(e.x, e.y, host.x, host.y) <= ATTACH_RANGE
-      );
+      )
+        ? "hint.buildAttachTaken"
+        : null;
     }
-    if (gx < 0 || gy < 0 || gx + fp > MAP_COLS || gy + fp > MAP_ROWS) return false;
+    if (gx < 0 || gy < 0 || gx + fp > MAP_COLS || gy + fp > MAP_ROWS) return "hint.buildOob";
     let hMin = Infinity;
     let hMax = -Infinity;
     for (let x = gx; x < gx + fp; x++) {
       for (let y = gy; y < gy + fp; y++) {
         const t = typeAt(x, y);
         // low/high 可建；ramp/water/void 禁止（bridge 与地面同级允许）
-        if (t !== "low" && t !== "high" && t !== "bridge") return false;
+        if (t !== "low" && t !== "high" && t !== "bridge") return "hint.buildTerrain";
         const h = heightAt(x, y);
         if (h < hMin) hMin = h;
         if (h > hMax) hMax = h;
       }
     }
     // 不可横跨悬崖
-    if (hMax - hMin > 0.6) return false;
+    if (hMax - hMin > 0.6) return "hint.buildSlope";
     // 重叠：任何非空军存活实体的碰撞圈与占地矩形相交即不可放
     for (const e of this.entities) {
       if (!e.alive || e.isAir) continue;
@@ -1584,7 +1757,7 @@ export class GameScene extends Phaser.Scene {
       if (def.requiresVespeneGeyser && e.def.id === "vespene") continue;
       const er = e.r / TILE_W;
       if (e.x + er <= gx || e.x - er >= gx + fp || e.y + er <= gy || e.y - er >= gy + fp) continue;
-      return false;
+      return "hint.buildBlocked";
     }
     // 精炼厂必须建在未占用气泉上（气泉中心在占地中心附近）
     if (def.requiresVespeneGeyser) {
@@ -1598,19 +1771,29 @@ export class GameScene extends Phaser.Scene {
           Math.abs(g.x - cx) < 0.75 &&
           Math.abs(g.y - cy) < 0.75
       );
-      if (!geyser) return false;
+      if (!geyser) return "hint.buildNeedGeyser";
       const occupied = this.entities.some(
         (b) => b.alive && b.def.requiresVespeneGeyser && Math.hypot(b.x - geyser.x, b.y - geyser.y) < 1.5
       );
-      if (occupied) return false;
+      if (occupied) return "hint.buildGeyserTaken";
     }
-    return true;
+    return null;
   }
 
   /** 左键落子：合法性已由幽灵保证；扣费 → 建筑入场 → 指派最近 SCV 前往施工 */
   tryPlaceBuilding() {
     const pl = this.placing;
-    if (!pl || !pl.valid) return;
+    if (!pl) return;
+    if (!pl.valid) {
+      // 此前静默 return → 红色幽灵点击无反应。给出具体原因提示（与幽灵红色一致）
+      if (pl.reason) this.showHint(t(pl.reason));
+      return;
+    }
+    // 镜像端：落子改发主机（合法性校验/扣费/施工指派都在主机世界执行）
+    if (this.emitNetCmd({ kind: "build", defId: pl.defId, x: pl.gx, y: pl.gy })) {
+      this.exitPlacing();
+      return;
+    }
     this.placeBuilding(pl.defId, pl.gx, pl.gy);
     this.exitPlacing();
   }
@@ -1754,20 +1937,20 @@ export class GameScene extends Phaser.Scene {
       const def = ALL_DEFS[item.id];
       if (!def) return item.id;
       return def.minerals || def.vespene
-        ? `${def.name} ${def.minerals}${def.vespene ? "/" + def.vespene : ""}`
-        : def.name;
+        ? `${defName(def)} ${def.minerals}${def.vespene ? "/" + def.vespene : ""}`
+        : defName(def);
     }
     if (item.kind === "morph") {
       const def = ALL_DEFS[item.id];
       return def
-        ? `${def.name} ${def.minerals}${def.vespene ? "/" + def.vespene : ""}`
+        ? `${defName(def)} ${def.minerals}${def.vespene ? "/" + def.vespene : ""}`
         : item.id;
     }
     const k = UPGRADE_KINDS[item.id];
     if (!k) return item.id;
     const lvl = this.upgradesOf(b.owner)[item.id] ?? 0;
-    if (lvl >= k.maxLevel) return `${k.name} MAX`;
-    return `${k.name} Lv${lvl + 1} ${k.minerals[lvl]}${k.vespene[lvl] ? "/" + k.vespene[lvl] : ""}`;
+    if (lvl >= k.maxLevel) return `${upgradeName(item.id)} MAX`;
+    return `${upgradeName(item.id)} Lv${lvl + 1} ${k.minerals[lvl]}${k.vespene[lvl] ? "/" + k.vespene[lvl] : ""}`;
   }
 
   /** 需求方是否已建成前置建筑（训练/变异科技门槛） */
@@ -1819,7 +2002,7 @@ export class GameScene extends Phaser.Scene {
     const gh = this.scale.gameSize.height;
     const items = this.panelItemsOf(b);
     const cols = 6;
-    const bw = 96;
+    const bw = LANG === "en" ? 140 : 96;
     const bh = 24;
     const gapX = 8;
     const gapY = 6;
@@ -1834,7 +2017,7 @@ export class GameScene extends Phaser.Scene {
         const row = Math.floor(i / cols);
         const btn = new LiquidButton();
         btn.label = this.panelItemLabel(b, item);
-        btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, 0xd8ffe6));
+        btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", LANG === "en" ? 11 : 12, 0xd8ffe6));
         btn.setSize(bw, bh);
         btn.position.set(x0 + col * (bw + gapX), y0 + row * (bh + gapY));
         btn.addEventListener(LiquidMouseEvent.CLICK, () => this.onPanelPick(b.id, item));
@@ -1850,7 +2033,7 @@ export class GameScene extends Phaser.Scene {
     let title: any = null;
     try {
       title = new LiquidLabel();
-      title.text = `【${b.def.name}】点按钮下单 · 训练/变异/研究`;
+      title.text = t("panel.trainTitle", { name: defName(b.def) });
       title.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 13, 0xffe9a8));
       title.setSize(cols * (bw + gapX), 20);
       title.position.set(x0, y0 - 24);
@@ -1864,6 +2047,7 @@ export class GameScene extends Phaser.Scene {
       buildingId: b.id,
       title,
       rect: { x: x0 - 4, y: y0 - 4, w: cols * (bw + gapX), h: rows * (bh + gapY) + 8 },
+      sig: "",
     };
     // 面板互斥：训练面板与建造面板不同时开
     this.closeBuildPanel();
@@ -1909,6 +2093,17 @@ export class GameScene extends Phaser.Scene {
     }
     const res = this.resOf(b.owner);
     const sup = this.supplyOf(b.owner);
+    // 脏检查签名：ok/label 依赖的全部输入（余额、人口、队列、变异/研究占用、
+    // 拦截机机库、各科技等级）。买任何东西都会动余额 → 签名必变，不会漏刷新。
+    const lv = this.upgradesOf(b.owner);
+    const sig =
+      `${res.minerals}|${res.vespene}|${sup.used}/${sup.provided}|${b.morphTo ?? ""}|` +
+      `${b.researchKind ?? ""}|${b.trainQueue.length}|${b.bay.length}|` +
+      panel.buttons
+        .map(({ item }) => (item.kind === "research" ? `${item.id}:${lv[item.id] ?? 0}` : ""))
+        .join(",");
+    if (sig === panel.sig) return;
+    panel.sig = sig;
     for (const { btn, item } of panel.buttons) {
       let ok = false;
       const label = this.panelItemLabel(b, item);
@@ -1949,44 +2144,44 @@ export class GameScene extends Phaser.Scene {
       // 注意：解构出的 btn 即 LiquidButton 本体（trainPanel.buttons 元素是 { btn, item }），
       // 误写 btn.btn 会拿到 undefined → 训练面板开启期间每帧 TypeError → 游戏主循环死亡
       btn.label = ok || label.endsWith("MAX") ? label : `${label} ×`;
-      btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", 12, ok ? 0xd8ffe6 : 0x66766d));
+      btn.setStyle("textFormat", new TextFormat("Consolas, 'Courier New', monospace", LANG === "en" ? 11 : 12, ok ? 0xd8ffe6 : 0x66766d));
     }
   }
 
   /** 训练校验+扣费+入队（玩家训练面板与 AI 经济共用）。返回错误文案；null = 成功 */
   tryTrain(b: Entity, defId: string): string | null {
     const def = ALL_DEFS[defId];
-    if (!b || !b.alive || !def) return "建筑无效";
-    if (!b.constructed) return "建筑未完工，不能训练";
-    if (b.morphTo) return "变异中，不能训练";
-    if (b.trainQueue.length >= 5) return "训练队列已满（5）";
+    if (!b || !b.alive || !def) return t("err.invalidBuilding");
+    if (!b.constructed) return t("err.notConstructedTrain");
+    if (b.morphTo) return t("err.morphingTrain");
+    if (b.trainQueue.length >= 5) return t("err.queueFull", { n: 5 });
     // 航母机库：拦截机满员拒训（免费但受 bay 容量约束）
     if (
       defId === "interceptor" &&
       b.def.interceptorBay &&
       b.bay.length >= b.def.interceptorBay
     ) {
-      return `机库已满（${b.def.interceptorBay}）`;
+      return t("err.hangarFull", { n: b.def.interceptorBay });
     }
     if (def.requires && !this.hasConstructed(b.owner, def.requires)) {
       const need = ALL_DEFS[def.requires];
-      return `需要 ${need ? need.name : def.requires}`;
+      return t("err.requires", { name: need ? defName(need) : def.requires });
     }
     const res = this.resOf(b.owner);
     if (res.minerals < def.minerals || res.vespene < def.vespene) {
       return res.minerals < def.minerals
-        ? `矿物不足：需要 ${def.minerals}（现有 ${res.minerals}）`
-        : `瓦斯不足：需要 ${def.vespene}（现有 ${res.vespene}）`;
+        ? t("hint.noMinerals", { need: def.minerals, have: res.minerals })
+        : t("hint.noVespene", { need: def.vespene, have: res.vespene });
     }
     this.updateSupply();
     const sup = this.supplyOf(b.owner);
     if (sup.used + (def.supplyCost ?? 0) > sup.provided) {
-      return `人口不足：需要 ${def.supplyCost}（${sup.used}/${sup.provided}）`;
+      return t("err.noSupply", { need: def.supplyCost ?? 0, used: sup.used, provided: sup.provided });
     }
     // 虫族孵化场系：训练 = 消耗一只附着幼虫（变异）；放在全部校验通过之后
     if (b.def.larvaMorph) {
       const larvae = this.aliveLarvae(b);
-      if (larvae.length === 0) return "没有幼虫：等待孵化场再生";
+      if (larvae.length === 0) return t("err.noLarva");
       larvae[0].alive = false;
       (b as any)._larvae = this.aliveLarvae(b);
     }
@@ -2002,6 +2197,8 @@ export class GameScene extends Phaser.Scene {
   onPanelPick(buildingId: number, item: PanelItem) {
     const b = this.entities.find((e) => e.id === buildingId);
     if (!b) return;
+    // 镜像端：面板操作改发主机回放（训练/变异/研究都在主机世界执行）
+    if (this.emitNetCmd({ kind: "panel", bid: buildingId, item })) return;
     const err =
       item.kind === "train"
         ? this.tryTrain(b, item.id)
@@ -2079,20 +2276,20 @@ export class GameScene extends Phaser.Scene {
    * hatchery→lair→hive / creepColony→sunken·spore / spire→greaterSpire）。null = 成功 */
   tryMorph(b: Entity, targetId: string): string | null {
     const def = ALL_DEFS[targetId];
-    if (!b || !b.alive || !def) return "建筑无效";
-    if (!b.constructed) return "建筑未完工，不能变异";
-    if (def.upgradeOf !== b.def.id) return "非法变异目标";
-    if (b.morphTo) return "变异进行中";
-    if (b.trainQueue.length > 0) return "训练队列非空，不能变异";
+    if (!b || !b.alive || !def) return t("err.invalidBuilding");
+    if (!b.constructed) return t("err.notConstructedMorph");
+    if (def.upgradeOf !== b.def.id) return t("err.invalidMorph");
+    if (b.morphTo) return t("err.morphInProgress");
+    if (b.trainQueue.length > 0) return t("err.queueNotEmpty");
     if (def.requires && !this.hasConstructed(b.owner, def.requires)) {
       const need = ALL_DEFS[def.requires];
-      return `需要 ${need ? need.name : def.requires}`;
+      return t("err.requires", { name: need ? defName(need) : def.requires });
     }
     const res = this.resOf(b.owner);
     if (res.minerals < def.minerals || res.vespene < def.vespene) {
       return res.minerals < def.minerals
-        ? `矿物不足：需要 ${def.minerals}（现有 ${res.minerals}）`
-        : `瓦斯不足：需要 ${def.vespene}（现有 ${res.vespene}）`;
+        ? t("hint.noMinerals", { need: def.minerals, have: res.minerals })
+        : t("hint.noVespene", { need: def.vespene, have: res.vespene });
     }
     res.minerals -= def.minerals;
     res.vespene -= def.vespene;
@@ -2114,7 +2311,7 @@ export class GameScene extends Phaser.Scene {
         b.morphProgress = 0;
         if (def) {
           b.applyDef(def);
-          if (b.owner === "player") this.showHint(`${def.name} 变异完成`);
+          if (b.owner === "player") this.showHint(t("hint.morphDone", { name: defName(def) }));
           this.updateSupply(); // supplyProvided 可能随形态变化
           this.updateHud();
         }
@@ -2125,15 +2322,15 @@ export class GameScene extends Phaser.Scene {
   /** 研究校验+扣费+启动（academy/ebay/armory/forge/evolutionChamber；等级按阵营全局生效） */
   startResearch(b: Entity, kindId: string): string | null {
     const k = UPGRADE_KINDS[kindId];
-    if (!b || !b.alive || !b.constructed || !k) return "建筑无效";
-    if (b.researchKind) return "已有研究进行中";
+    if (!b || !b.alive || !b.constructed || !k) return t("err.invalidBuilding");
+    if (b.researchKind) return t("err.researching");
     const lvl = this.upgradesOf(b.owner)[kindId] ?? 0;
-    if (lvl >= k.maxLevel) return `${k.name}已满级（Lv${k.maxLevel}）`;
+    if (lvl >= k.maxLevel) return t("err.maxLevel", { name: upgradeName(kindId), lv: k.maxLevel });
     const res = this.resOf(b.owner);
     if (res.minerals < k.minerals[lvl] || res.vespene < k.vespene[lvl]) {
       return res.minerals < k.minerals[lvl]
-        ? `矿物不足：需要 ${k.minerals[lvl]}（现有 ${res.minerals}）`
-        : `瓦斯不足：需要 ${k.vespene[lvl]}（现有 ${res.vespene}）`;
+        ? t("hint.noMinerals", { need: k.minerals[lvl], have: res.minerals })
+        : t("hint.noVespene", { need: k.vespene[lvl], have: res.vespene });
     }
     res.minerals -= k.minerals[lvl];
     res.vespene -= k.vespene[lvl];
@@ -2158,7 +2355,7 @@ export class GameScene extends Phaser.Scene {
         b.researchKind = null;
         b.researchProgress = 0;
         if (b.owner === "player") {
-          this.showHint(`${k?.name ?? kindId} 完成 Lv${next}`);
+          this.showHint(t("hint.researchDone", { name: upgradeName(kindId), lv: next }));
           this.updateHud();
         }
       }
@@ -2209,7 +2406,7 @@ export class GameScene extends Phaser.Scene {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
           const gx = bx + dx;
           const gy = by + dy;
-          if (this.canPlaceAt(gx, gy, def)) return { gx, gy };
+          if (this.canPlaceAt(gx, gy, def) === null) return { gx, gy };
         }
       }
     }
@@ -2220,6 +2417,8 @@ export class GameScene extends Phaser.Scene {
   updateAI(dt: number) {
     if (this.gameOver) return; // 终局后 AI 停摆（横幅常驻，玩家仍可浏览操作）
     for (const owner of Object.keys(this.resBy)) {
+      // 网络局：真人玩家槽位不走 AI 经济（主机模拟所有阵营的玩家行为只由本人指令驱动）
+      if (this.humanNetOwners.has(owner)) continue;
       if (!ownerIsAI(owner)) continue;
       this.aiTimers[owner] = (this.aiTimers[owner] ?? Math.random() * AI_TICK_INTERVAL) + dt;
       if (this.aiTimers[owner] < AI_TICK_INTERVAL) continue;
@@ -2344,6 +2543,12 @@ export class GameScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     const dt = delta / 1000;
+
+    // 非主机：纯镜像渲染路径（不跑模拟；世界状态来自主机 10Hz 快照）
+    if (this.isNetGame && !this.isNetHost) {
+      this.updateNetMirror(dt);
+      return;
+    }
 
     // 相机边界兜底：Phaser 4 RESIZE 下 setBounds 失效（cam.width=0），
     // 每帧把 scroll 夹回地图范围，任何移动相机的路径（拖动/跳转/方向键）都不会露黑边
@@ -2486,12 +2691,25 @@ export class GameScene extends Phaser.Scene {
       if (!pb || !pb.alive || !pb.selected || !pb.constructed) this.closeTrainPanel();
     }
 
-    this.updateHud();
-    this.liquidUI?.minimap.refresh(this.entities, {
-      data: this.fog,
-      cols: MAP_COLS,
-      rows: MAP_ROWS,
-    });
+    // HUD/面板刷新节流（原每帧全链：人口重算 + 两面板逐按钮 setStyle/label +
+    // setStats → 每秒数千次对象分配与样式重设，是 GC 卡顿的主要来源之一）。
+    // 显式 updateHud()（训练/变异/研究等即时反馈点）仍是立即刷新。
+    this.hudTimer -= dt;
+    if (this.hudTimer <= 0) {
+      this.hudTimer = 0.15;
+      this.updateHud();
+    }
+
+    // 小地图刷新节流（原每帧全量重绘 canvas + 每帧 GPU 纹理上传 → 100ms 一次）
+    this.minimapTimer -= dt;
+    if (this.minimapTimer <= 0) {
+      this.minimapTimer = 0.1;
+      this.liquidUI?.minimap.refresh(this.entities, {
+        data: this.fog,
+        cols: MAP_COLS,
+        rows: MAP_ROWS,
+      });
+    }
 
     // 方向键平移相机（32×32 地图较大，便于巡视）
     const cam = this.cameras.main;
@@ -2703,11 +2921,11 @@ export class GameScene extends Phaser.Scene {
     const cost = caster.def.yamatoCost ?? 150;
     if (!caster.def.yamatoDamage) return;
     if (caster.energy < cost) {
-      this.showHint(`能量不足（需 ${cost}）`);
+      this.showHint(t("hint.noEnergy", { cost }));
       return;
     }
     if (target.isCloakedNow && !caster.canSeeCloaked(target)) {
-      this.showHint("无法锁定目标");
+      this.showHint(t("hint.lockdownNoTarget"));
       return;
     }
     caster.energy -= cost;
@@ -2720,23 +2938,23 @@ export class GameScene extends Phaser.Scene {
    * 被锁定目标清空指令原地冻结（移动/攻击/采集/装载全停），蓝色 tint，持续 LOCKDOWN_DURATION。 */
   fireLockdown(caster: Entity, target: Entity) {
     if (target.def.isBuilding) {
-      this.showHint("锁定只能作用于机械单位");
+      this.showHint(t("hint.lockdownMechanical"));
       return;
     }
     if (!target.def.mechanical) {
-      this.showHint("锁定目标必须是机械单位");
+      this.showHint(t("hint.lockdownMechanical"));
       return;
     }
     if (target.lockedTimer > 0) {
-      this.showHint("目标已被锁定");
+      this.showHint(t("hint.lockdownAlready"));
       return;
     }
     if (Phaser.Math.Distance.Between(caster.x, caster.y, target.x, target.y) > LOCKDOWN_RANGE) {
-      this.showHint("目标超出锁定距离");
+      this.showHint(t("hint.lockdownOutOfRange"));
       return;
     }
     if (caster.energy < LOCKDOWN_COST) {
-      this.showHint(`能量不足（需 ${LOCKDOWN_COST}）`);
+      this.showHint(t("hint.noEnergy", { cost: LOCKDOWN_COST }));
       return;
     }
     caster.energy -= LOCKDOWN_COST;
@@ -2755,7 +2973,7 @@ export class GameScene extends Phaser.Scene {
       duration: 400,
       onComplete: () => g.destroy(),
     });
-    this.showHint(`已锁定 ${target.def.name}`);
+    this.showHint(t("hint.lockdownDone", { name: defName(target.def) }));
   }
 
   /** 核弹：ghost 指定落点 → 原地显形引导 NUKE_GUIDE_MS → 半径 NUKE_RADIUS 格溅射。
@@ -2796,7 +3014,7 @@ export class GameScene extends Phaser.Scene {
       .setDepth(3002);
     this.uiLayer.add(txt);
     this.nukeText = txt;
-    this.showHint(`核弹引导中（${NUKE_GUIDE_MS / 1000}s 后命中）`);
+    this.showHint(t("hint.nukeCountdown", { s: NUKE_GUIDE_MS / 1000 }));
   }
 
   /** 核弹引导推进：ghost 死亡/离开引导点即打断；倒计时归零引爆 */
@@ -2812,7 +3030,7 @@ export class GameScene extends Phaser.Scene {
       !g.alive ||
       Phaser.Math.Distance.Between(g.x, g.y, this.nukeLaunchX, this.nukeLaunchY) > 0.1
     ) {
-      this.cancelNuke(g.alive ? "核弹引导被打断" : "引导 ghost 阵亡，核弹取消");
+      this.cancelNuke(g.alive ? t("hint.nukeInterrupted") : t("hint.nukeGhostDead"));
       return;
     }
     this.nukeTimer -= dt * 1000;
@@ -2864,7 +3082,7 @@ export class GameScene extends Phaser.Scene {
         e.takeDamage(NUKE_DAMAGE, gh ?? undefined);
       }
     }
-    this.cancelNuke("核弹命中");
+    this.cancelNuke(t("hint.nukeHit"));
   }
 
   /* ============ 航母拦截机（出击/回收状态机） ============ */
@@ -2993,7 +3211,7 @@ export class GameScene extends Phaser.Scene {
   castStorm(caster: Entity, wx: number, wy: number) {
     if (!caster.alive) return;
     if (caster.energy < STORM_COST) {
-      this.showHint(`能量不足（需 ${STORM_COST}）`);
+      this.showHint(t("hint.noEnergy", { cost: STORM_COST }));
       return;
     }
     caster.energy -= STORM_COST;
@@ -3049,15 +3267,15 @@ export class GameScene extends Phaser.Scene {
    * 容器可见性修正（迷雾外 AI 实体可能是隐藏态）+ 人口重算（owner 变更不改实体数）。 */
   fireMindControl(caster: Entity, target: Entity) {
     if (target.def.isBuilding) {
-      this.showHint("无法控制建筑");
+      this.showHint(t("hint.mcNoBuilding"));
       return;
     }
     if (Phaser.Math.Distance.Between(caster.x, caster.y, target.x, target.y) > MIND_CONTROL_RANGE) {
-      this.showHint("目标超出施法距离");
+      this.showHint(t("hint.mcOutOfRange"));
       return;
     }
     if (caster.energy < MIND_CONTROL_COST) {
-      this.showHint(`能量不足（需 ${MIND_CONTROL_COST}）`);
+      this.showHint(t("hint.noEnergy", { cost: MIND_CONTROL_COST }));
       return;
     }
     caster.energy -= MIND_CONTROL_COST;
@@ -3081,7 +3299,7 @@ export class GameScene extends Phaser.Scene {
       onComplete: () => g.destroy(),
     });
     console.log(`[mind control] ${target.def.name}: ${oldOwner} -> ${target.owner}`);
-    this.showHint(`已控制 ${target.def.name}`);
+    this.showHint(t("hint.mcDone", { name: defName(target.def) }));
   }
 
   /** 大和炮特效：粗蓝光柱 + 大范围闪光爆点 */
@@ -3191,7 +3409,8 @@ export class GameScene extends Phaser.Scene {
       supplyProvided: this.supplyProvided,
       unitCount: n,
       selCount: this.selection.length,
-      hint: "左键点建筑 → 底部面板点按钮造兵 · 右键移动/攻击/采集 · 中键拖地图 · A+左键 攻击移动 · ESC 取消",
+      fps: Math.round(this.game.loop.actualFps),
+      hint: t("hud.hint"),
     });
   }
 
@@ -3226,7 +3445,7 @@ export class GameScene extends Phaser.Scene {
     const f = this.fog;
     for (let i = 0; i < f.length; i++) if (f[i] === 2) f[i] = 1;
     for (const e of this.entities) {
-      if (!e.alive || e.owner !== "player") continue;
+      if (!e.alive || !isFriendly(e.owner)) continue;
       const r = e.def.isBuilding ? FOG_SIGHT_BUILDING : SIGHT_RANGE;
       const r2 = r * r;
       const x0 = Math.max(0, Math.floor(e.x - r));
@@ -3242,7 +3461,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     for (const e of this.entities) {
-      if (e.def.isNeutral || e.owner === "player") continue;
+      if (e.def.isNeutral || isFriendly(e.owner)) continue;
       const vis = this.fogStateAt(e.x, e.y) >= 2;
       if (e.container.visible !== vis) e.container.visible = vis;
     }
@@ -3250,56 +3469,90 @@ export class GameScene extends Phaser.Scene {
 
   /** 覆盖层重绘：逐格菱形贴各自地形高度（未探索不透明黑 / 已探索暗化），
    * 并向下补侧壁裙边——tilemap 高地侧壁像素不被顶面菱形覆盖；未探索恒补
-   * （黑上叠黑无痕），已探索仅在高差处补（同 alpha 菱形叠画会出现双重暗带）。 */
+   * （黑上叠黑无痕），已探索仅在高差处补（同 alpha 菱形叠画会出现双重暗带）。
+   * 画进 CanvasTexture（FOG_UPDATE_INTERVAL 节流），按迷雾态×地形高度分批。
+   *
+   * 性能关键：禁用 canvas 路径——本机 Chrome（软件渲染）对跨全图巨型路径的
+   * fill 代价 O(路径规模²)（逐像素 × 逐边扫描），一趟 16 万子路径可挂死主线程
+   * 数十秒。改用 setTransform 把格坐标线性映射为等距投影：单位正方形
+   * [gx,gx+1]×[gy,gy+1] 恰好映射为该格顶面菱形 → 同行内同迷雾态同高度的
+   * 连续段一次 fillRect 画出整段菱形带；侧壁化为另两组线性变换下的平行
+   * 四边形 fillRect（左壁相邻格共享角点可并段，右壁逐格）。全程零路径操作。 */
   private redrawFogOverlay() {
-    const g = this.fogGfx;
-    g.clear();
+    const tex = this.fogTex;
+    if (!tex) return;
+    const ctx = tex.getContext();
+    // 上一趟遗留的斜切变换 → 复位后再整图清除
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, FOG_CANVAS_W, FOG_CANVAS_H);
+    const e0 = ORIGIN_X - FOG_CANVAS_OX;
+    const f0 = ORIGIN_Y - FOG_CANVAS_OY;
+    const S = FOG_SS;
+    const fog = this.fog;
+    // 逐格预取：地形高度×2；已探索裙边×2（与下侧两邻格的最大高差，出界按 0）
     for (let gy = 0; gy < MAP_ROWS; gy++) {
+      const row = gy * MAP_COLS;
       for (let gx = 0; gx < MAP_COLS; gx++) {
-        const st = this.fog[gy * MAP_COLS + gx];
-        if (st === 2) continue;
         const h = heightAt(gx + 0.5, gy + 0.5);
-        const { sx, sy } = worldToScreen(gx + 0.5, gy + 0.5, h);
-        g.fillStyle(0x000000, st === 0 ? 1 : FOG_EXPLORED_ALPHA);
-        g.fillPoints(
-          [
-            new Phaser.Math.Vector2(sx, sy - HALF_H),
-            new Phaser.Math.Vector2(sx + HALF_W, sy),
-            new Phaser.Math.Vector2(sx, sy + HALF_H),
-            new Phaser.Math.Vector2(sx - HALF_W, sy),
-          ],
-          true
-        );
-        const skirt =
-          st === 0
-            ? ELEV
-            : Math.max(
-              0,
-              h - Math.max(heightAt(gx + 1.5, gy + 0.5), heightAt(gx + 0.5, gy + 1.5))
-            ) * ELEV;
-        if (skirt > 0) {
-          // 左/右两块平行四边形，贴住菱形下缘侧壁（与菱形无缝、互不叠画）
-          g.fillPoints(
-            [
-              new Phaser.Math.Vector2(sx - HALF_W, sy),
-              new Phaser.Math.Vector2(sx, sy + HALF_H),
-              new Phaser.Math.Vector2(sx, sy + HALF_H + skirt),
-              new Phaser.Math.Vector2(sx - HALF_W, sy + skirt),
-            ],
-            true
-          );
-          g.fillPoints(
-            [
-              new Phaser.Math.Vector2(sx, sy + HALF_H),
-              new Phaser.Math.Vector2(sx + HALF_W, sy),
-              new Phaser.Math.Vector2(sx + HALF_W, sy + skirt),
-              new Phaser.Math.Vector2(sx, sy + HALF_H + skirt),
-            ],
-            true
-          );
+        fogH2[row + gx] = h * 2;
+        const hR = gx + 1 < MAP_COLS ? heightAt(gx + 1, gy) : 0;
+        const hD = gy + 1 < MAP_ROWS ? heightAt(gx, gy + 1) : 0;
+        fogSk[row + gx] = Math.max(0, h - Math.max(hR, hD)) * 2;
+      }
+    }
+    // 两趟迷雾态（未探索先画、已探索后叠，与旧版一致）× 三个高度级分批
+    for (let state = 0; state <= 1; state++) {
+      ctx.fillStyle = state === 0 ? "#000000" : `rgba(0,0,0,${FOG_EXPLORED_ALPHA})`;
+      for (let h2 = 0; h2 <= 2; h2++) {
+        const fy = S * (f0 - ELEV * h2 * 0.5);
+        // 顶面菱形：连续段一次 fillRect
+        ctx.setTransform(S * HALF_W, S * HALF_H, -S * HALF_W, S * HALF_H, S * e0, fy);
+        for (let gy = 0; gy < MAP_ROWS; gy++) {
+          const row = gy * MAP_COLS;
+          for (let gx = 0; gx < MAP_COLS; ) {
+            const i = row + gx;
+            if (fog[i] !== state || fogH2[i] !== h2) { gx++; continue; }
+            let len = 1;
+            while (gx + len < MAP_COLS && fog[row + gx + len] === state && fogH2[row + gx + len] === h2) len++;
+            ctx.fillRect(gx, gy, len, 1);
+            gx += len;
+          }
+        }
+        // 左壁（左下缘平行四边形带；相邻格共享角点 → 整段并成一个 fillRect）
+        ctx.setTransform(S * HALF_W, S * HALF_H, 0, S * HALF_H, S * e0, fy);
+        for (let gy = 0; gy < MAP_ROWS; gy++) {
+          const row = gy * MAP_COLS;
+          for (let gx = 0; gx < MAP_COLS; ) {
+            const i = row + gx;
+            if (fog[i] !== state || fogH2[i] !== h2) { gx++; continue; }
+            const w = state === 0 ? 1 : fogSk[i] * 0.5;
+            if (w <= 0) { gx++; continue; }
+            let len = 1;
+            while (
+              gx + len < MAP_COLS &&
+              fog[row + gx + len] === state &&
+              fogH2[row + gx + len] === h2 &&
+              (state === 0 || fogSk[row + gx + len] === fogSk[i])
+            ) len++;
+            ctx.fillRect(gx - gy - 1, 2 * gy + 2, len, w);
+            gx += len;
+          }
+        }
+        // 右壁（右下缘）：段内 fillRect 参数随 gx 递变无法并段 → 逐格（仅悬崖处有量）
+        ctx.setTransform(S * HALF_W, -S * HALF_H, 0, S * HALF_H, S * e0, fy);
+        for (let gy = 0; gy < MAP_ROWS; gy++) {
+          const row = gy * MAP_COLS;
+          for (let gx = 0; gx < MAP_COLS; gx++) {
+            const i = row + gx;
+            if (fog[i] !== state || fogH2[i] !== h2) continue;
+            const w = state === 0 ? 1 : fogSk[i] * 0.5;
+            if (w > 0) ctx.fillRect(gx - gy, 2 * gx + 2, 1, w);
+          }
         }
       }
     }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    tex.refresh();
   }
 
   // —— 胜负判定 ——
@@ -3311,7 +3564,7 @@ export class GameScene extends Phaser.Scene {
     this.victoryTimer += dt;
     if (this.victoryTimer < VICTORY_CHECK_INTERVAL) return;
     this.victoryTimer = 0;
-    if (!this.entities.some((e) => e.alive && e.owner === "player")) {
+    if (!this.entities.some((e) => e.alive && isFriendly(e.owner))) {
       this.endGame("defeat");
       return;
     }
@@ -3329,14 +3582,20 @@ export class GameScene extends Phaser.Scene {
 
   /** 终局：中央横幅常驻（金色胜利 / 红色失败）+ AI 停摆；死亡动画/渲染照常 */
   private endGame(result: "victory" | "defeat") {
+    const fresh = this.gameOver == null;
     this.gameOver = result;
+    // 主机：把胜负上报服务器（落库 + 全员广播 game_over 结算）
+    if (fresh && this.isNetGame && this.isNetHost) {
+      const myTeam = NET_TEAMS?.["player"] ?? "A";
+      net.gameOver(result === "victory" ? (myTeam as "A" | "B") : myTeam === "A" ? "B" : "A");
+    }
     const win = result === "victory";
     console.log(`[game over] ${result}`);
-    this.showHint(win ? "所有敌对势力已覆灭" : "我方部队全灭");
+    this.showHint(win ? t("banner.victoryHint") : t("banner.defeatHint"));
     const gw = this.scale.gameSize.width;
     const gh = this.scale.gameSize.height;
-    const t = this.add
-      .text(gw / 2, gh / 2, win ? "胜  利" : "失  败", {
+    const banner = this.add
+      .text(gw / 2, gh / 2, win ? t("banner.victory") : t("banner.defeat"), {
         fontFamily: "Consolas, 'Courier New', monospace",
         fontSize: "56px",
         color: win ? "#ffd24a" : "#ff5252",
@@ -3348,7 +3607,255 @@ export class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(6500)
       .setAlpha(0);
-    this.tweens.add({ targets: t, alpha: 1, duration: 600 });
+    this.tweens.add({ targets: banner, alpha: 1, duration: 600 });
+  }
+
+  // ==================== 网络对战（主机权威 + 镜像端）====================
+
+  /** 本端槽位号 */
+  private mySlot(): number {
+    return this.netSlots.find((s) => s.uid === this.myUid)?.slot ?? 0;
+  }
+
+  /** 本端出生点（按槽位确定性映射四角；与主机 buildNetBases 同一顺序） */
+  private netMySpawn(): { gx: number; gy: number; corner: string } {
+    const ordered = [...this.netSlots].sort((a, b) => a.slot - b.slot);
+    const idx = Math.max(0, ordered.findIndex((s) => s.slot === this.mySlot()));
+    const loc = START_LOCATIONS[idx % START_LOCATIONS.length];
+    return { gx: loc.gx, gy: loc.gy, corner: loc.corner };
+  }
+
+  /** 网络局出生点：槽位序 → 四角（两端一致）；每玩家用自己种族的出生模板 */
+  private buildNetBases() {
+    const mySlot = this.mySlot();
+    const ordered = [...this.netSlots].sort((a, b) => a.slot - b.slot);
+    // 地图只有 4 个出生角落：>4 人时后续玩家共用角落，主基地向地图中心方向
+    // 每档偏移 6 格（ footprint 2×2 + 随从 ±2 格 → 6 格间距不重叠；出生区恒为 low 平地）
+    const perCorner = new Map<number, number>();
+    return ordered.map((s, i) => {
+      const ci = i % START_LOCATIONS.length;
+      const loc = START_LOCATIONS[ci];
+      const k = perCorner.get(ci) ?? 0;
+      perCorner.set(ci, k + 1);
+      const gx = loc.gx + Math.sign(MAP_W / 2 - loc.gx) * 6 * k;
+      const gy = loc.gy + Math.sign(MAP_H / 2 - loc.gy) * 6 * k;
+      const tpl = PLAYER_STARTS[s.race] ?? PLAYER_STARTS.terran;
+      return { ...tpl, owner: this.slotToOwner(s.slot, mySlot), gx, gy, corner: loc.corner };
+    });
+  }
+
+  /** 服务器世界 owner → 本端显示 owner：自己恒为 player，主机槽位显示为 ai8 */
+  private netOwnerToDisplay(o: string): Owner {
+    const mySlot = this.mySlot();
+    if (o === "player") return mySlot === 0 ? "player" : "ai8";
+    const m = /^ai(\d)$/.exec(o);
+    if (m && Number(m[1]) === mySlot) return "player";
+    return o as Owner;
+  }
+
+  /** 对局期消息：快照 / 指令回放 / 断线提示 / 结算（覆盖 MenuScene 房间期处理器） */
+  private registerNetHandlers() {
+    net.clearHandlers();
+    net.setHandler("snapshot_to", (m: any) => this.applySnapshot(m));
+    net.setHandler("cmd_from", (m: any) => this.execRemoteCmd(m.from, m.cmd));
+    net.setHandler("player_left", (m: any) => {
+      this.showHint(`⚠ ${t("net.offlineTag")} slot${m.slot}`);
+    });
+    net.setHandler("game_over", (m: any) => this.onNetGameOver(m));
+    // 场景就绪前到达的快照已缓存（隐藏 tab RAF 冻结期）：注册后立即补放，
+    // 避免镜像端开局空场等下一拍
+    if (net.lastSnapshot) this.applySnapshot(net.lastSnapshot);
+  }
+
+  /** 按 id 找实体（快照对账 / 远端指令回放） */
+  private byId(id: number): Entity | null {
+    return this.entities.find((e) => e.id === id) ?? null;
+  }
+
+  /** 实体 → 快照行（精简字段；flags 位：1 已完工 / 2 攻城 / 4 隐形 / 8 携带资源） */
+  private serializeEntity(e: Entity): SnapEnt {
+    const flags =
+      (e.constructed ? 1 : 0) |
+      (e.sieged ? 2 : 0) |
+      (e.isCloakedNow ? 4 : 0) |
+      (e.carrying > 0 ? 8 : 0);
+    return {
+      id: e.id,
+      defId: e.def.id,
+      owner: e.owner,
+      x: Math.round(e.x * 100) / 100,
+      y: Math.round(e.y * 100) / 100,
+      hp: Math.round(e.hp),
+      shield: Math.round(e.shield),
+      en: Math.round(e.energy),
+      flags,
+      buildProgress: e.constructed ? undefined : Math.round(e.buildProgress),
+    };
+  }
+
+  /** 主机：全量快照广播（实体 <200，10Hz 全量在局域网开销可忽略；简化掉增量对账） */
+  private broadcastSnapshot() {
+    this.snapTick++;
+    const ents: SnapEnt[] = [];
+    for (const e of this.entities) {
+      if (!e.alive) continue;
+      ents.push(this.serializeEntity(e));
+    }
+    const res: Record<string, { m: number; v: number }> = {};
+    for (const [o, r] of Object.entries(this.resBy)) {
+      res[o] = { m: Math.floor(r.minerals), v: Math.floor(r.vespene) };
+    }
+    const supply: Record<string, { p: number; u: number }> = {};
+    for (const [o, s] of Object.entries(this.supplyBy)) {
+      supply[o] = { p: s.provided, u: s.used };
+    }
+    net.snapshot(this.snapTick, ents, res, supply);
+  }
+
+  /** 镜像端：应用主机快照（新实体落位、存量对账、死亡清理、资源/人口覆盖） */
+  private applySnapshot(m: { tick: number; ents: SnapEnt[]; res?: any; supply?: any }) {
+    const seen = new Set<number>();
+    for (const s of m.ents) {
+      seen.add(s.id);
+      let e = this.byId(s.id);
+      if (!e) {
+        const flags = s.flags ?? 1;
+        e = this.spawnFromDef(s.x, s.y, s.defId, this.netOwnerToDisplay(s.owner), (flags & 1) !== 0);
+        if (!e || !e.alive) continue;
+        e.id = s.id;
+      }
+      const fl = s.flags ?? 1;
+      e.netX = s.x;
+      e.netY = s.y;
+      e.hp = s.hp;
+      e.shield = s.shield;
+      if (s.en !== undefined) e.energy = s.en;
+      e.constructed = (fl & 1) !== 0;
+      e.sieged = (fl & 2) !== 0;
+      if (s.buildProgress !== undefined) e.buildProgress = s.buildProgress;
+    }
+    // 快照中消失的实体 → 死亡（走本端死亡动画/清理管线）
+    for (const e of this.entities) {
+      if (e.alive && !seen.has(e.id)) e.alive = false;
+    }
+    // 资源/人口桶整体覆盖（display owner 映射）
+    if (m.res) {
+      for (const [o, r] of Object.entries(m.res)) {
+        this.resBy[this.netOwnerToDisplay(o)] = { minerals: (r as any).m, vespene: (r as any).v };
+      }
+    }
+    if (m.supply) {
+      for (const [o, s] of Object.entries(m.supply)) {
+        this.supplyBy[this.netOwnerToDisplay(o)] = { provided: (s as any).p, used: (s as any).u };
+      }
+    }
+    this.updateHud();
+  }
+
+  /** 镜像端每帧：向快照位置插值 + 渲染同步 + 迷雾 + 死亡清理 */
+  private updateNetMirror(dt: number) {
+    this.clampCamScroll();
+    this.syncHoverName();
+
+    const k = Math.min(1, dt * 8); // 10Hz 快照 → 每帧向目标收敛（≈100ms 内到位）
+    for (const e of this.entities) {
+      if (e.alive) {
+        if (e.netX !== undefined) {
+          e.x += (e.netX - e.x) * k;
+          e.y += ((e.netY ?? e.y) - e.y) * k;
+        }
+        e.syncRender();
+      }
+    }
+
+    // 死亡清理（与主循环同管线：死亡序列帧 → 销毁）
+    this.entities = this.entities.filter((e) => {
+      if (e.alive) return true;
+      if (e.deathTimer < 0) e.startDeath();
+      if (e.deathTimer > 0) return true;
+      this.spawnDeathFx(e);
+      e.container.destroy();
+      return false;
+    });
+    for (const e of this.entities) {
+      if (!e.alive && e.deathTimer > 0) e.deathTimer = Math.max(0, e.deathTimer - dt * 1000);
+    }
+
+    // 迷雾按镜像实体（isFriendly）重算
+    this.updateFog(dt);
+  }
+
+  /** 镜像端：世界指令改发主机（本地不直接改模拟状态）。返回 true 表示已改发 */
+  private emitNetCmd(cmd: Record<string, unknown>): boolean {
+    if (!this.isNetGame || this.isNetHost) return false;
+    net.cmd(++this.cmdSeq, cmd);
+    return true;
+  }
+
+  /** 主机：回放远端玩家指令（ids/caster 均为快照 id，与主机世界一致） */
+  private execRemoteCmd(fromUid: number, cmd: any) {
+    const mySlot = this.mySlot();
+    const slot = this.netSlots.find((s) => s.uid === fromUid);
+    const owner = slot ? this.slotToOwner(slot.slot, mySlot) : null;
+    if (!owner) return;
+    const ents = (cmd.ids ?? []).map((id: number) => this.byId(id)).filter((e: Entity | null): e is Entity => !!e && e.alive && e.owner === owner);
+    const caster = this.byId(cmd.c);
+    const target = this.byId(cmd.t);
+    switch (cmd.kind) {
+      case "rc": // 右键语义回放（移动/攻击/采集/施工/进驻）
+        this.applyRightClick(ents, cmd.x, cmd.y);
+        break;
+      case "am": // 攻击移动
+        for (const e of ents) {
+          if (!e.def.isBuilding) e.attackMoveTo(cmd.x, cmd.y);
+        }
+        break;
+      case "panel": { // 训练/变异/研究面板
+        const b = this.byId(cmd.bid);
+        if (!b || !b.alive || b.owner !== owner) break;
+        const item = cmd.item;
+        if (item.kind === "train") this.tryTrain(b, item.id);
+        else if (item.kind === "morph") this.tryMorph(b, item.id);
+        else if (item.kind === "research") this.startResearch(b, item.id);
+        break;
+      }
+      case "build": // 建造落子（placeBuilding 自动选最近该阵营工人并扣费）
+        this.placeBuilding(cmd.defId, cmd.x, cmd.y, owner);
+        break;
+      case "siege":
+        for (const e of ents) if (e.def.siegeDamage) e.toggleSiege();
+        break;
+      case "stim":
+        for (const e of ents) {
+          if (!e.def.stim || e.stimTimer > 0 || e.hp <= STIM_COST_HP) continue;
+          e.hp -= STIM_COST_HP;
+          e.stimTimer = STIM_DURATION;
+        }
+        break;
+      case "yamato":
+        if (caster && target && caster.owner === owner) this.fireYamato(caster, target);
+        break;
+      case "lockdown":
+        if (caster && target && caster.owner === owner) this.fireLockdown(caster, target);
+        break;
+      case "nuke":
+        if (caster && caster.owner === owner) this.launchNuke(caster, cmd.x, cmd.y);
+        break;
+      case "storm":
+        if (caster && caster.owner === owner) this.castStorm(caster, cmd.x, cmd.y);
+        break;
+      case "mc":
+        if (caster && target && caster.owner === owner) this.fireMindControl(caster, target);
+        break;
+    }
+  }
+
+  /** 镜像端：收到 game_over 广播 → 按本端阵营结算横幅（主机在 endGame 已上报，跳过） */
+  private onNetGameOver(m: { winner: "A" | "B" | "draw" }) {
+    if (this.gameOver) return;
+    const myTeam = NET_TEAMS?.["player"] ?? "A";
+    const win = m.winner !== "draw" && m.winner === myTeam;
+    this.endGame(win ? "victory" : "defeat");
   }
 
   // —— 编队（Ctrl+1~9）——
@@ -3359,11 +3866,11 @@ export class GameScene extends Phaser.Scene {
     if (ctrl) {
       const members = this.selection.filter((e) => e.alive && e.owner === "player");
       if (!members.length) {
-        this.showHint(`编队 ${n}：当前选区没有可编入的单位`);
+        this.showHint(t("hint.groupEmpty", { n }));
         return;
       }
       this.controlGroups[n] = members;
-      this.showHint(`编队 ${n} 已保存（${members.length} 个单位）`);
+      this.showHint(t("hint.groupSaved", { n, count: members.length }));
       return;
     }
     const group = (this.controlGroups[n] ?? []).filter((e) => e.alive);

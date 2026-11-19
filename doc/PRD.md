@@ -1,7 +1,7 @@
 # PRD —— 星际争霸 1 风格 Web RTS Demo
 
-> 版本：v1.0（2026-10-27）
-> 关联文档：[开发进度.md](开发进度.md)（实现状态）、[单位与建筑手册.md](单位与建筑手册.md)（数值）、[操作指南.md](操作指南.md)、[地图.md](地图.md)、[资源需求.md](资源需求.md)、[AI出资源清单.md](AI出资源清单.md)
+> 版本：v1.1（2026-11-19，新增战网真人对战）
+> 关联文档：[开发进度.md](开发进度.md)（实现状态）、[单位与建筑手册.md](单位与建筑手册.md)（数值）、[操作指南.md](操作指南.md)、[地图.md](地图.md)、[资源需求.md](资源需求.md)、[AI出资源清单.md](AI出资源清单.md)、[真人对战模式计划.md](真人对战模式计划.md)（战网架构与协议）
 
 ---
 
@@ -12,18 +12,18 @@
 
 ### 1.2 背景与目标
 - 星际争霸 1 原版素材受暴雪版权保护，不可直接分发；本项目以**程序化生成 + AI 出图**的方式自产全部素材，无任何版权风险。
-- 技术验证目标：跑通 Phaser 4 + TypeScript + Vite 做等距 2D RTS 的完整链路（大地图渲染、寻路、多阵营 AI、生产/科技/技能体系）。
+- 技术验证目标：跑通 Phaser 4 + TypeScript + Vite 做等距 2D RTS 的完整链路（大地图渲染、寻路、多阵营 AI、生产/科技/技能体系），并跑通 **真人对战的服务器链路**（Node.js + ws + MySQL：注册/登录/房间/转发/结算）。
 
 ### 1.3 目标用户
-- 怀旧 RTS 玩家：想在工作间隙来一局 10 分钟的星际。
-- 前端/游戏开发者：参考一个"小而全"的 Phaser 4 RTS 实现范本。
+- 怀旧 RTS 玩家：想在工作间隙来一局 10 分钟的星际——单机打 AI，或局域网/本机拉朋友战网对战。
 
 ### 1.4 平台与运行环境
 | 项 | 要求 |
 |---|---|
 | 浏览器 | Chrome / Edge 现代版（WebGL + Web Audio） |
-| 运行 | `npm run dev` 开发服（localhost:5173）或 `npm run build` 静态部署 |
-| 依赖 | Node 18+；运行时仅 Phaser 4.0.0，无后端 |
+| 客户端 | `npm run dev` 开发服（localhost:5173）或 `npm run build` 静态部署 |
+| 战网服务器 | `server/` 目录 `npm run build-and-start`（HTTP 8100 / WS 8101，IDE 运行任务「启动服务器」可实时看日志）；仅战网对战需要，单机模式无需启动 |
+| 依赖 | Node 18+；客户端运行时 Phaser 4.0.0；战网服务器依赖 ws + mysql2（MySQL 本地库 `starcraft`） |
 | 分辨率 | RESIZE 自适应，桌面键鼠为主 |
 
 ---
@@ -106,6 +106,13 @@
 ### 3.7 调试工具（P1）
 - Phaser Inspector DevTools 扩展（`debug/extension/`）：注入 `window.__GAME__` 后在 DevTools 面板审查场景树/坐标/depth/显隐/层级，支持多选批量操作（仅 Phaser 4）。
 
+### 3.8 战网真人对战（P0，已上线）
+- **账号**：HTTP 注册/登录（用户名 2~16 位，sha256+salt 存储），MySQL `starcraft` 库 users/battles 表；token 有效期 24h，重复登录踢旧连接。
+- **房间**：主菜单「战网」按钮 → 登录 → 房间列表 / 创建房间（配比 1v1~4v4，房间上限 8 人；>4 人共用出生角落、主基地自动向中心偏移；种族任选）→ 房间内双列阵营 A/B（点击换边，自动分到人少的队）→ 房主开始；A/B 人数对等才可开局。
+- **对局**：主机权威快照——建房者=主机跑完整模拟（10Hz 全量快照广播），其余端只发指令+插值渲染快照；服务器零模拟只做鉴权/房间/转发。槽位映射复用 8 槽位 owner（slot0=主机），镜像端本机恒显示己方视角。
+- **结算**：一方阵营全灭或全员掉线判负 → 胜负横幅；战报落库 battles（含双方 uid 与时长），users 胜负计数同步；中途掉线即判负（省略断线重连/观战/换主机）。
+- 架构与协议详见[真人对战模式计划.md](真人对战模式计划.md)。
+
 ---
 
 ## 4. 项目架构
@@ -114,28 +121,34 @@
 | 层 | 选型 | 说明 |
 |---|---|---|
 | 引擎 | Phaser 4.0.0（ESM） | 只有命名导出，统一 `import * as Phaser` |
-| 语言 | TypeScript | es2020 目标，sourcemap |
-| 构建 | Vite | 端口 5273；phaser alias 到 UMD 构建以兼容 liquidphaser 的 default 导入 |
+| 语言 | TypeScript | es2020 目标，sourcemap（客户端与 server 均为 TS） |
+| 构建 | Vite | 端口 5173；phaser alias 到 UMD 构建以兼容 liquidphaser 的 default 导入 |
 | UI 库 | liquidphaser | 训练面板/HUD 的 Liquid UI 组件（需 pinLiquidUI 处理点击命中） |
-| 运行时依赖 | 无后端、无数据库 | 纯前端单机，资源全部运行时生成或打包在 public/ |
+| 战网服务器 | Node.js + ws + mysql2 | `server/` 独立 TS 工程（tsc → dist）；HTTP 8100 注册登录 / WS 8101 房间对战；MySQL 本地库 `starcraft`；仿 chaos 分层（module_mgr 注册表 + packet_handler + db dao） |
 
 ### 4.2 目录结构
 ```
 starcraft/
-├── src/                    # 游戏源码
+├── src/                    # 游戏源码（客户端）
 │   ├── main.ts             # 入口：场景链 [MenuScene, GameScene]、DEV 下挂 window.__GAME__
-│   ├── config.ts           # 全部 Def 数据定义（三族 91 个实体数值）、全局常量
-│   ├── entities.ts         # Entity 行为内核：移动/战斗/采集/建造/技能/隐形/死亡状态机
+│   ├── config.ts           # 全部 Def 数据定义（三族 91 个实体数值）、全局常量、网络 owner 映射（isFriendly/isHostile）
+│   ├── entities.ts         # Entity 行为内核：移动/战斗/采集/建造/技能/隐形/死亡状态机、快照序列化字段
+│   ├── net/client.ts       # 战网客户端：HTTP 注册登录 + ws 房间/指令/快照通道（net 单例）
 │   ├── scenes/
-│   │   ├── MenuScene.ts    # 主菜单（对局设置 → scene.start 传 enemies）
-│   │   └── GameScene.ts    # 主场景：输入/生产/AI/迷雾/胜负/特效/面板等系统层
+│   │   ├── MenuScene.ts    # 主菜单（对局设置 + 战网登录/房间 UI → scene.start 传参）
+│   │   └── GameScene.ts    # 主场景：输入/生产/AI/迷雾/胜负/特效/面板等系统层；主机权威模拟 + 镜像渲染
 │   ├── ui/liquidHud.ts     # Liquid UI 挂载（HUD/训练面板/提示）
-│   ├── maps/lostTemple.ts  # 地图数据：地形、出生点、矿区、buildBases 随机布局
+│   ├── maps/lostTemple.ts  # 地图数据：地形、出生点、矿区、buildBases 随机布局、PLAYER_STARTS
 │   ├── terrain.ts / tilemap.ts / iso.ts   # 等距坐标换算、地形定义、逐格铺贴（不用 TilemapLayer）
 │   ├── pathfinding.ts      # A* 网格寻路
 │   ├── Textures.ts         # 程序化像素纹理生成（兜底素材）
 │   ├── animDefs.ts/.json   # 动画帧定义（与 art-src 管线产物对齐）
 │   └── minimap.ts          # 小地图（含迷雾烘焙）
+├── server/                 # 战网服务器（TS 独立工程，见 3.8 与真人对战模式计划.md）
+│   ├── tsconfig.json / package.json   # build(tsc) / start(node dist/main.js) / build-and-start
+│   ├── config.json         # http 8100 / ws 8101 / MySQL / token 有效期
+│   ├── test/smoke.js       # 冒烟测试（纯 ws 客户端 13 项断言）
+│   └── src/                # main/config/types/http_server/ws_server + db/ + module_mgr/ + common/
 ├── public/
 │   ├── maps/               # lost-temple.tmj（Tiled）+ terrain.png
 │   └── textures/           # 生成的横条 spritesheet 贴图
@@ -144,6 +157,7 @@ starcraft/
 │   ├── ai-src/             # AI 出图（按 race/tex/动作/帧号 组织）
 │   ├── libresprite/        # 三族 89 个 .ase 工程文件
 │   └── tools/              # ase_dump / ase_anim / ase_fx / ase_preview
+├── .vscode/tasks.json      # 运行任务：启动服务器（编译+启动，实时日志）/ 停止服务器
 ├── debug/extension/        # Phaser Inspector DevTools 扩展
 └── doc/                    # 本文档及其余设计文档
 ```
@@ -179,7 +193,7 @@ scripts/gen-tileset.mjs / gen-map.mjs → public/maps/（terrain.png + lost-temp
 
 ## 5. 非目标（本期不做）
 
-- **多人联机/存档**：单机 vs AI 为限。
+- **断线重连恢复 / 观战 / 掉线换主机**：战网对局掉线即判负，不做恢复与观战（计划内省略项）。
 - **原版素材导入**：出于版权考虑永不打包暴雪素材（用户可自备替换至 `public/assets/`）。
 - **种族特色依赖链**：pylon 供能、精炼厂瓦斯前置、菌毯蔓延/建筑依赖菌毯——均按简化处理不做。
 - **潜地（burrow）**、虫族提速科技、细分升级树（射程/肾上腺等）——只做通用攻防研究。
@@ -194,6 +208,7 @@ scripts/gen-tileset.mjs / gen-map.mjs → public/maps/（terrain.png + lost-temp
 3. **AI 有对抗性**：AI 能独立完成采集→建造→爆兵→进攻闭环（20s 内可见矿增长与出兵）。
 4. **性能**：8 阵营混战规模下 60fps 流畅、迷雾/寻路无卡顿感。
 5. **素材零版权**：仓库内不含任何暴雪素材；全部贴图可由脚本确定性重生成。
+6. **战网对战**：启动服务器后，两个浏览器端注册登录 → 建房/加入 → 人数对等开局 → 双端各自正常渲染并互相同步指令与战况 → 结束出胜负横幅且战报落库；单机 AI 局回归无行为变化。
 
 ---
 
@@ -207,5 +222,6 @@ scripts/gen-tileset.mjs / gen-map.mjs → public/maps/（terrain.png + lost-temp
 | M4 技能全家桶 | 2026-10-10 | 能量系统、大和炮/锁定/核弹、运输/航母/碉堡、兴奋剂、科技升级、形态变异、迷雾、胜负/编队、布雷/法术、附属/修理/退款 |
 | M5 体验打磨 | 2026-10-13~15 | 主菜单流程、建筑外观差异化、悬停名签、AI 关键帧注入管线、资源显示尺寸 |
 | M6 美术管线深化 | 进行中 | LibreSprite 工程化、帧动画 tag 规范、像素特效（刀光/火光） |
+| M7 战网真人对战 | 2026-11-19 | server/ TS 服务器（注册登录/房间/转发/结算/断线判负）+ 主机权威快照同步 + 战网 UI + 战报落库 |
 
 > 实现细节与逐批验证记录见[开发进度.md](开发进度.md)；本文档只维护"产品应该是什么"。

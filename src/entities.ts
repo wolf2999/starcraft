@@ -140,6 +140,10 @@ export class Entity {
   buildProgress = 0;
   buildNeed = 0;
 
+  // —— 网络镜像（非主机端）：快照目标位置，渲染时向目标插值（见 GameScene.updateNetMirror）——
+  netX?: number;
+  netY?: number;
+
   // 生产（建筑）：训练队列，首项为当前训练项（GameScene.updateTraining 推进，
   // 完成后 spawnTrained 出兵）。队列中的单位即时占用人口（updateSupply 统计）。
   trainQueue: { defId: string; progress: number; need: number }[] = [];
@@ -860,6 +864,9 @@ export class Entity {
     this.deathTimer = ((d.to - d.from + 1) / d.fps) * 1000;
     this.selectionRing.clear();
     this.hpBar.clear();
+    // 死亡清空了两个 Graphics → 重置脏标记，防止后续重绘被签名命中跳过
+    this.barSig = "";
+    this.ringSig = "";
     this.playAnim("death", true);
     return true;
   }
@@ -913,15 +920,34 @@ export class Entity {
     this.drawSelectionRing();
   }
 
+  /** 血条脏检查签名：屏幕坐标/各进度条/能量/盾血/选中态均未变则跳过重绘
+   * （原地静止单位占多数；移动单位坐标每帧在变、训练/变异/研究进度每帧推进 → 正常重绘） */
+  private barSig = "";
+  /** 选中圈脏检查签名：仅位置取整/选中态变化时重绘 */
+  private ringSig = "";
+
   drawHpBar() {
     const g = this.hpBar;
+    const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
+    const job = this.trainQueue[0];
+    const sig = [
+      Math.round(sx), Math.round(sy),
+      job ? Math.round(job.progress) : -1,
+      this.morphTo ? Math.round(this.morphProgress) : -1,
+      this.researchKind ? Math.round(this.researchProgress) : -1,
+      this.maxEnergy > 0 ? Math.round(this.energy) : -1,
+      this.selected ? 1 : 0,
+      this.hideHpBar ? 1 : 0,
+      Math.round(this.hp * 4), Math.round(this.shield * 4),
+    ].join("|");
+    if (sig === this.barSig) return;
+    this.barSig = sig;
     g.clear();
+    const barW = Math.max(20, this.def.size ?? 24);
+    const topY = sy - this.sprite.displayHeight * 0.78;
     // 训练进度条：队列非空就画（放在最上方，不受满血隐藏/选中影响）
-    if (this.trainQueue.length > 0) {
-      const job = this.trainQueue[0];
-      const barW = Math.max(20, this.def.size ?? 24);
-      const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
-      const ty = sy - this.sprite.displayHeight * 0.78 - 14;
+    if (job) {
+      const ty = topY - 14;
       g.fillStyle(0x000000, 0.5);
       g.fillRect(sx - barW / 2 - 1, ty - 1, barW + 2, 4);
       g.fillStyle(0xffdd55, 1);
@@ -929,9 +955,7 @@ export class Entity {
     }
     // 变异进度条（橙）：建筑形态变异中（与训练条同款，堆叠其上）
     if (this.morphTo) {
-      const barW = Math.max(20, this.def.size ?? 24);
-      const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
-      const ty = sy - this.sprite.displayHeight * 0.78 - 20;
+      const ty = topY - 20;
       g.fillStyle(0x000000, 0.5);
       g.fillRect(sx - barW / 2 - 1, ty - 1, barW + 2, 4);
       g.fillStyle(0xff8833, 1);
@@ -944,9 +968,7 @@ export class Entity {
     }
     // 研究进度条（青）：科技研究中（与训练/变异条同款，堆叠其上）
     if (this.researchKind) {
-      const barW = Math.max(20, this.def.size ?? 24);
-      const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
-      const ty = sy - this.sprite.displayHeight * 0.78 - (this.morphTo ? 26 : 20);
+      const ty = topY - (this.morphTo ? 26 : 20);
       g.fillStyle(0x000000, 0.5);
       g.fillRect(sx - barW / 2 - 1, ty - 1, barW + 2, 4);
       g.fillStyle(0x55ddff, 1);
@@ -959,35 +981,31 @@ export class Entity {
     }
     // 能量条（蓝）：有能量上限的单位恒显（法术/技能资源可视化）
     if (this.maxEnergy > 0) {
-      const eW = Math.max(20, this.def.size ?? 24);
-      const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
-      const ey = sy - this.sprite.displayHeight * 0.78 - 8 - (this.maxShield > 0 ? 10 : 5);
+      const ey = topY - 8 - (this.maxShield > 0 ? 10 : 5);
       g.fillStyle(0x000000, 0.5);
-      g.fillRect(sx - eW / 2 - 1, ey - 1, eW + 2, 4);
+      g.fillRect(sx - barW / 2 - 1, ey - 1, barW + 2, 4);
       g.fillStyle(0x88aaff, 1);
-      g.fillRect(sx - eW / 2, ey, eW * (this.energy / this.maxEnergy), 2.5);
+      g.fillRect(sx - barW / 2, ey, barW * (this.energy / this.maxEnergy), 2.5);
     }
     if (this.hideHpBar && !this.selected) return;
     if (this.def.isBuilding && this.hp >= this.maxHp && this.shield >= this.maxShield && !this.selected)
       return;
 
-    const barW = Math.max(20, this.def.size ?? 24);
-    const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
-    const topY = sy - this.sprite.displayHeight * 0.78 - 8;
+    const hpTop = topY - 8;
 
     if (this.maxShield > 0) {
       g.fillStyle(0x000000, 0.5);
-      g.fillRect(sx - barW / 2 - 1, topY - 1, barW + 2, 5);
+      g.fillRect(sx - barW / 2 - 1, hpTop - 1, barW + 2, 5);
       g.fillStyle(0x33aaff, 1);
-      g.fillRect(sx - barW / 2, topY, barW * (this.shield / this.maxShield), 3);
+      g.fillRect(sx - barW / 2, hpTop, barW * (this.shield / this.maxShield), 3);
     }
 
     g.fillStyle(0x000000, 0.5);
-    g.fillRect(sx - barW / 2 - 1, topY + (this.maxShield > 0 ? 4 : 0) - 1, barW + 2, 5);
+    g.fillRect(sx - barW / 2 - 1, hpTop + (this.maxShield > 0 ? 4 : 0) - 1, barW + 2, 5);
     g.fillStyle(0x33dd44, 1);
     g.fillRect(
       sx - barW / 2,
-      topY + (this.maxShield > 0 ? 4 : 0),
+      hpTop + (this.maxShield > 0 ? 4 : 0),
       barW * (this.hp / this.maxHp),
       3
     );
@@ -995,9 +1013,18 @@ export class Entity {
 
   drawSelectionRing() {
     const g = this.selectionRing;
-    g.clear();
-    if (!this.selected) return;
+    if (!this.selected) {
+      if (this.ringSig) {
+        g.clear();
+        this.ringSig = "";
+      }
+      return;
+    }
     const { sx, sy } = worldToScreen(this.x, this.y, heightAt(this.x, this.y));
+    const sig = `${Math.round(sx)},${Math.round(sy)}`;
+    if (sig === this.ringSig) return;
+    this.ringSig = sig;
+    g.clear();
     const ry = this.def.isAir ? this.sprite.displayHeight * 0.45 : 6;
     g.lineStyle(2, 0x00ff66, 0.9);
     g.strokeEllipse(sx, sy, this.def.size ?? 24, ry);

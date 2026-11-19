@@ -1,0 +1,535 @@
+/**
+ * 国际化（i18n）：简体中文 / 繁体中文 / 英文。
+ *
+ * - 语言在模块加载时按浏览器系统语言自动判定（见 detectLang），不支持的语言回落英文。
+ * - 界面文案统一走 t(key, params)（{name} 占位符插值）；
+ * - 实体名称/描述走 defName/defDesc（数据表见 i18nDefs.ts），升级种类走 upgradeName。
+ * - zh-CN 的实体文案以 config.ts 内的中文数据为源，不重复维护。
+ */
+
+import { DEF_TEXT } from "./i18nDefs";
+
+export type Lang = "zh-CN" | "zh-TW" | "en";
+
+/** 按系统语言判定：zh-TW/zh-HK/zh-MO/zh-Hant → 繁中；其它 zh → 简中；其余 → 英文 */
+function detectLang(): Lang {
+  const nav = typeof navigator === "undefined" ? null : navigator;
+  if (!nav) return "en";
+  const list = (nav.languages?.length ? nav.languages : [nav.language]) || [];
+  for (const raw of list) {
+    const l = (raw || "").toLowerCase();
+    if (!l) continue;
+    if (l.startsWith("zh")) {
+      return /(tw|hk|mo|hant)/.test(l) ? "zh-TW" : "zh-CN";
+    }
+    if (l.startsWith("en")) return "en";
+  }
+  return "en";
+}
+
+export let LANG: Lang = detectLang();
+
+/** 运行期切换语言（主菜单语言按钮调用）；切换后重建菜单即可，新开的对局沿用该语言 */
+export function setLang(lang: Lang): void {
+  LANG = lang;
+  if (typeof document !== "undefined") {
+    document.documentElement.lang = lang;
+    document.title = t("app.title");
+  }
+}
+
+type Dict = Record<string, string>;
+
+const UI: Record<Lang, Dict> = {
+  "zh-CN": {
+    "app.title": "星际争霸 Demo - Phaser 4",
+    "lang.zhCN": "简中",
+    "lang.zhTW": "繁中",
+    "lang.en": "EN",
+
+    "menu.title": "对 局 设 置",
+    "menu.enemiesLabel": "敌人数量（加自己最多 4 家）",
+    "menu.enemies1": "1 个敌人",
+    "menu.enemies2": "2 个敌人",
+    "menu.enemies3": "3 个敌人",
+    "menu.enemiesDesc1": "1 个敌人：双人对决，专注运营，一波定胜负",
+    "menu.enemiesDesc2": "2 个敌人：三足鼎立，警惕两线开花",
+    "menu.enemiesDesc3": "3 个敌人：四角混战，经典 4 人图体验",
+    "menu.raceLabel": "种族（你操控的阵营）",
+    "menu.mapInfo": "地图：Lost Temple（唯一地图，无需选择）",
+    "menu.spawnInfo": "出生点：玩家与敌人随机分配到地图四角",
+    "menu.start": "开 始 游 戏",
+    "menu.footerLeft": "星际争霸风格 · 程序化美术 · 无官方素材",
+    "menu.hotkeys": "Q/W/E 选种族 · 1/2/3 选敌人 · 回车开始",
+    "menu.net": "战 网 对 战",
+
+    "net.title": "战 网 对 战",
+    "net.back": "返 回",
+    "net.user": "用户名",
+    "net.pass": "密码",
+    "net.login": "登 录",
+    "net.register": "注 册",
+    "net.loggedAs": "已登录：{name}（胜 {wins} / 负 {losses}）",
+    "net.roomsTitle": "房 间 列 表",
+    "net.refresh": "刷 新",
+    "net.createRoom": "创 建 房 间",
+    "net.noRooms": "暂无房间 · 点击「创建房间」开局",
+    "net.joinHint": "点击房间行加入",
+    "net.modeLabel": "对战规模（A/B 两阵营人数对等才能开始）",
+    "net.teamLabel": "你的种族",
+    "net.confirmCreate": "确 认 创 建",
+    "net.teamA": "A 队",
+    "net.teamB": "B 队",
+    "net.roomId": "房间 {id}（{n}v{n}）",
+    "net.switchHint": "点击队伍列切换阵营 · 满员后房主可开始",
+    "net.start": "开 始 战 斗",
+    "net.waitHost": "等待房主开始……",
+    "net.leave": "离 开 房 间",
+    "net.hostTag": "房主",
+    "net.offlineTag": "离线",
+    "net.connFail": "无法连接服务器（{addr}），请先启动 server",
+    "net.disconnected": "连接已断开",
+    "net.kicked": "账号在其他窗口登录，本窗口已下线",
+    "net.winsLabel": "胜 {w} / 负 {l}",
+    "net.err100": "登录已过期，请重新登录",
+    "net.err101": "参数错误",
+    "net.err102": "房间不存在",
+    "net.err103": "房间已满",
+    "net.err104": "已在房间中",
+    "net.err105": "对局已开始",
+    "net.err106": "阵营已满",
+    "net.err107": "仅房主可操作",
+    "net.err108": "双方人数未对等，无法开始",
+    "net.err109": "不在对局中",
+    "net.err110": "无权限",
+
+    "race.terran": "人族 TERRAN",
+    "race.protoss": "神族 PROTOSS",
+    "race.zerg": "虫族 ZERG",
+    "race.terran.desc": "人族：机械化与重装步兵，SCV 建造 · 卫星站反隐 · 核弹",
+    "race.protoss.desc": "神族：护盾与高科技，探针建造 · 狂徒龙骑 · 灵能风暴",
+    "race.zerg.desc": "虫族：幼虫变异 · 孵化场出兵 · 数量压制",
+
+    "hud.minerals": "矿物",
+    "hud.vespene": "瓦斯",
+    "hud.supply": "人口",
+    "hud.units": "我方单位",
+    "hud.selected": "选中",
+    "hud.fps": "FPS",
+    "hud.hint": "左键点建筑 → 底部面板点按钮造兵 · 选农民按 B 建造 · 右键移动/攻击/采集 · 中键拖地图 · A+左键 攻击移动 · ESC 取消",
+
+    "upgrade.attack": "攻击升级",
+    "upgrade.armor": "防御升级",
+
+    "ui.building": "（建造中）",
+    "panel.trainTitle": "【{name}】点按钮下单 · 训练/变异/研究",
+
+    "hint.siegeOn": "坦克展开攻城模式",
+    "hint.siegeOff": "坦克收起攻城模式",
+    "hint.noEnergy": "能量不足（需 {cost}）",
+    "hint.noEnergyCurrent": "能量不足（需 {cost}，当前 {cur}）",
+    "hint.yamatoAim": "大和炮：左键指定敌方目标（右键取消）",
+    "hint.unloaded": "已卸载 {n} 名乘客",
+    "hint.stim": "兴奋剂：攻速/移速提升 50%",
+    "hint.stimNoHp": "生命值不足，无法施放兴奋剂",
+    "hint.lockdownAim": "锁定：左键指定敌方机械单位（右键取消）",
+    "hint.needNuke": "需要{name}（核弹科技）",
+    "hint.nukeGuiding": "核弹已在引导中",
+    "hint.nukeReload": "核弹装填中（剩余 {s}s）",
+    "hint.nukeAim": "核弹：左键指定打击地点（右键取消）",
+    "hint.minePlanted": "蜘蛛雷已埋设",
+    "hint.stormAim": "风暴：左键指定落点（右键取消）",
+    "hint.mcAim": "精神控制：左键指定敌方单位（右键取消）",
+    "hint.nukeCancelled": "已取消核弹",
+    "hint.yamatoCancelled": "已取消大和炮",
+    "hint.lockdownCancelled": "已取消锁定",
+    "hint.stormCancelled": "已取消风暴",
+    "hint.stormOutOfRange": "超出施法距离（风暴）",
+    "hint.mcCancelled": "已取消精神控制",
+    "hint.bunkerFull": "碉堡已满（4）",
+    "hint.noMinerals": "矿物不足：需要 {need}（现有 {have}）",
+    "hint.noVespene": "瓦斯不足：需要 {need}（现有 {have}）",
+    "hint.morphDone": "{name} 变异完成",
+    "hint.researchDone": "{name} 完成 Lv{lv}",
+    "hint.lockdownNoTarget": "无法锁定目标",
+    "hint.lockdownMechanical": "锁定只能作用于机械单位",
+    "hint.lockdownAlready": "目标已被锁定",
+    "hint.lockdownOutOfRange": "目标超出锁定距离",
+    "hint.lockdownDone": "已锁定 {name}",
+    "hint.nukeCountdown": "核弹引导中（{s}s 后命中）",
+    "hint.nukeInterrupted": "核弹引导被打断",
+    "hint.nukeGhostDead": "引导 ghost 阵亡，核弹取消",
+    "hint.nukeHit": "核弹命中",
+    "hint.mcNoBuilding": "无法控制建筑",
+    "hint.mcOutOfRange": "目标超出施法距离",
+    "hint.mcDone": "已控制 {name}",
+    "hint.groupEmpty": "编队 {n}：当前选区没有可编入的单位",
+    "hint.groupSaved": "编队 {n} 已保存（{count} 个单位）",
+    "hint.buildOob": "无法建造：超出地图范围",
+    "hint.buildTerrain": "无法建造：地形不允许（需平地/高地/桥面）",
+    "hint.buildSlope": "无法建造：占地跨高差过大",
+    "hint.buildBlocked": "无法建造：位置被单位或建筑阻挡",
+    "hint.buildNeedGeyser": "精炼厂必须建在气泉上",
+    "hint.buildGeyserTaken": "无法建造：该气泉已被占用",
+    "hint.buildNeedHost": "无法建造：必须建在对应主建筑旁",
+    "hint.buildAttachTaken": "无法建造：该主建筑旁已有同类附属",
+
+    "err.invalidBuilding": "建筑无效",
+    "err.notConstructedTrain": "建筑未完工，不能训练",
+    "err.morphingTrain": "变异中，不能训练",
+    "err.queueFull": "训练队列已满（{n}）",
+    "err.hangarFull": "机库已满（{n}）",
+    "err.requires": "需要 {name}",
+    "err.noSupply": "人口不足：需要 {need}（{used}/{provided}）",
+    "err.noLarva": "没有幼虫：等待孵化场再生",
+    "err.notConstructedMorph": "建筑未完工，不能变异",
+    "err.invalidMorph": "非法变异目标",
+    "err.morphInProgress": "变异进行中",
+    "err.queueNotEmpty": "训练队列非空，不能变异",
+    "err.researching": "已有研究进行中",
+    "err.maxLevel": "{name}已满级（Lv{lv}）",
+
+    "banner.victory": "胜  利",
+    "banner.defeat": "失  败",
+    "banner.victoryHint": "所有敌对势力已覆灭",
+    "banner.defeatHint": "我方部队全灭",
+  },
+
+  "zh-TW": {
+    "app.title": "星海爭霸 Demo - Phaser 4",
+    "lang.zhCN": "簡中",
+    "lang.zhTW": "繁中",
+    "lang.en": "EN",
+
+    "menu.title": "對 局 設 定",
+    "menu.enemiesLabel": "敵人數量（含自己最多 4 家）",
+    "menu.enemies1": "1 個敵人",
+    "menu.enemies2": "2 個敵人",
+    "menu.enemies3": "3 個敵人",
+    "menu.enemiesDesc1": "1 個敵人：雙人對決，專注營運，一波定勝負",
+    "menu.enemiesDesc2": "2 個敵人：三足鼎立，警惕兩線開花",
+    "menu.enemiesDesc3": "3 個敵人：四角混戰，經典 4 人圖體驗",
+    "menu.raceLabel": "種族（你操控的陣營）",
+    "menu.mapInfo": "地圖：Lost Temple（唯一地圖，無需選擇）",
+    "menu.spawnInfo": "出生點：玩家與敵人隨機分配到地圖四角",
+    "menu.start": "開 始 遊 戲",
+    "menu.footerLeft": "星海爭霸風格 · 程序化美術 · 無官方素材",
+    "menu.hotkeys": "Q/W/E 選種族 · 1/2/3 選敵人 · 回車開始",
+    "menu.net": "戰 網 對 戰",
+
+    "net.title": "戰 網 對 戰",
+    "net.back": "返 回",
+    "net.user": "使用者名稱",
+    "net.pass": "密碼",
+    "net.login": "登 入",
+    "net.register": "註 冊",
+    "net.loggedAs": "已登入：{name}（勝 {wins} / 敗 {losses}）",
+    "net.roomsTitle": "房 間 列 表",
+    "net.refresh": "刷 新",
+    "net.createRoom": "建 立 房 間",
+    "net.noRooms": "目前無房間 · 點擊「建立房間」開局",
+    "net.joinHint": "點擊房間列加入",
+    "net.modeLabel": "對戰規模（A/B 兩陣營人數對等才能開始）",
+    "net.teamLabel": "你的種族",
+    "net.confirmCreate": "確 認 建 立",
+    "net.teamA": "A 隊",
+    "net.teamB": "B 隊",
+    "net.roomId": "房間 {id}（{n}v{n}）",
+    "net.switchHint": "點擊隊伍列切換陣營 · 滿員後房主可開始",
+    "net.start": "開 始 戰 斗",
+    "net.waitHost": "等待房主開始……",
+    "net.leave": "離 開 房 間",
+    "net.hostTag": "房主",
+    "net.offlineTag": "離線",
+    "net.connFail": "無法連線伺服器（{addr}），請先啟動 server",
+    "net.disconnected": "連線已斷開",
+    "net.kicked": "帳號在其他視窗登入，本視窗已離線",
+    "net.winsLabel": "勝 {w} / 敗 {l}",
+    "net.err100": "登入已過期，請重新登入",
+    "net.err101": "參數錯誤",
+    "net.err102": "房間不存在",
+    "net.err103": "房間已滿",
+    "net.err104": "已在房間中",
+    "net.err105": "對局已開始",
+    "net.err106": "陣營已滿",
+    "net.err107": "僅房主可操作",
+    "net.err108": "雙方人數未對等，無法開始",
+    "net.err109": "不在對局中",
+    "net.err110": "無權限",
+
+    "race.terran": "人族 TERRAN",
+    "race.protoss": "神族 PROTOSS",
+    "race.zerg": "蟲族 ZERG",
+    "race.terran.desc": "人族：機械化與重裝步兵，SCV 建造 · 衛星站反隱 · 核彈",
+    "race.protoss.desc": "神族：護盾與高科技，探針建造 · 狂戰士龍騎 · 靈能風暴",
+    "race.zerg.desc": "蟲族：幼蟲變異 · 孵化場出兵 · 數量壓制",
+
+    "hud.minerals": "礦物",
+    "hud.vespene": "瓦斯",
+    "hud.supply": "人口",
+    "hud.units": "我方單位",
+    "hud.selected": "選取",
+    "hud.fps": "FPS",
+    "hud.hint": "左鍵點建築 → 底部面板點按鈕造兵 · 選農民按 B 建造 · 右鍵移動/攻擊/採集 · 中鍵拖地圖 · A+左鍵 攻擊移動 · ESC 取消",
+
+    "upgrade.attack": "攻擊升級",
+    "upgrade.armor": "防禦升級",
+
+    "ui.building": "（建造中）",
+    "panel.trainTitle": "【{name}】點按鈕下單 · 訓練/變異/研究",
+
+    "hint.siegeOn": "坦克展開攻城模式",
+    "hint.siegeOff": "坦克收起攻城模式",
+    "hint.noEnergy": "能量不足（需 {cost}）",
+    "hint.noEnergyCurrent": "能量不足（需 {cost}，當前 {cur}）",
+    "hint.yamatoAim": "大和砲：左鍵指定敵方目標（右鍵取消）",
+    "hint.unloaded": "已卸載 {n} 名乘客",
+    "hint.stim": "興奮劑：攻速/移速提升 50%",
+    "hint.stimNoHp": "生命值不足，無法施放興奮劑",
+    "hint.lockdownAim": "鎖定：左鍵指定敵方機械單位（右鍵取消）",
+    "hint.needNuke": "需要{name}（核彈科技）",
+    "hint.nukeGuiding": "核彈已在引導中",
+    "hint.nukeReload": "核彈裝填中（剩餘 {s}s）",
+    "hint.nukeAim": "核彈：左鍵指定打擊地點（右鍵取消）",
+    "hint.minePlanted": "蜘蛛雷已埋設",
+    "hint.stormAim": "風暴：左鍵指定落點（右鍵取消）",
+    "hint.mcAim": "精神控制：左鍵指定敵方單位（右鍵取消）",
+    "hint.nukeCancelled": "已取消核彈",
+    "hint.yamatoCancelled": "已取消大和砲",
+    "hint.lockdownCancelled": "已取消鎖定",
+    "hint.stormCancelled": "已取消風暴",
+    "hint.stormOutOfRange": "超出施法距離（風暴）",
+    "hint.mcCancelled": "已取消精神控制",
+    "hint.bunkerFull": "碉堡已滿（4）",
+    "hint.noMinerals": "礦物不足：需要 {need}（現有 {have}）",
+    "hint.noVespene": "瓦斯不足：需要 {need}（現有 {have}）",
+    "hint.morphDone": "{name} 變異完成",
+    "hint.researchDone": "{name} 完成 Lv{lv}",
+    "hint.lockdownNoTarget": "無法鎖定目標",
+    "hint.lockdownMechanical": "鎖定只能作用於機械單位",
+    "hint.lockdownAlready": "目標已被鎖定",
+    "hint.lockdownOutOfRange": "目標超出鎖定距離",
+    "hint.lockdownDone": "已鎖定 {name}",
+    "hint.nukeCountdown": "核彈引導中（{s}s 後命中）",
+    "hint.nukeInterrupted": "核彈引導被打斷",
+    "hint.nukeGhostDead": "引導 ghost 陣亡，核彈取消",
+    "hint.nukeHit": "核彈命中",
+    "hint.mcNoBuilding": "無法控制建築",
+    "hint.mcOutOfRange": "目標超出施法距離",
+    "hint.mcDone": "已控制 {name}",
+    "hint.groupEmpty": "編隊 {n}：目前選取區沒有可編入的單位",
+    "hint.groupSaved": "編隊 {n} 已儲存（{count} 個單位）",
+    "hint.buildOob": "無法建造：超出地圖範圍",
+    "hint.buildTerrain": "無法建造：地形不允許（需平地/高地/橋面）",
+    "hint.buildSlope": "無法建造：佔地跨高差過大",
+    "hint.buildBlocked": "無法建造：位置被單位或建築阻擋",
+    "hint.buildNeedGeyser": "精煉廠必須建在氣泉上",
+    "hint.buildGeyserTaken": "無法建造：該氣泉已被佔用",
+    "hint.buildNeedHost": "無法建造：必須建在對應主建築旁",
+    "hint.buildAttachTaken": "無法建造：該主建築旁已有同類附屬",
+
+    "err.invalidBuilding": "建築無效",
+    "err.notConstructedTrain": "建築未完工，不能訓練",
+    "err.morphingTrain": "變異中，不能訓練",
+    "err.queueFull": "訓練佇列已滿（{n}）",
+    "err.hangarFull": "機庫已滿（{n}）",
+    "err.requires": "需要 {name}",
+    "err.noSupply": "人口不足：需要 {need}（{used}/{provided}）",
+    "err.noLarva": "沒有幼蟲：等待孵化場再生",
+    "err.notConstructedMorph": "建築未完工，不能變異",
+    "err.invalidMorph": "非法變異目標",
+    "err.morphInProgress": "變異進行中",
+    "err.queueNotEmpty": "訓練佇列非空，不能變異",
+    "err.researching": "已有研究進行中",
+    "err.maxLevel": "{name}已滿級（Lv{lv}）",
+
+    "banner.victory": "勝  利",
+    "banner.defeat": "失  敗",
+    "banner.victoryHint": "所有敵對勢力已覆滅",
+    "banner.defeatHint": "我方部隊全滅",
+  },
+
+  en: {
+    "app.title": "StarCraft Demo - Phaser 4",
+    "lang.zhCN": "ZH-CN",
+    "lang.zhTW": "ZH-TW",
+    "lang.en": "EN",
+
+    "menu.title": "M A T C H   S E T U P",
+    "menu.enemiesLabel": "Enemies (max 4 incl. you)",
+    "menu.enemies1": "1 Enemy",
+    "menu.enemies2": "2 Enemies",
+    "menu.enemies3": "3 Enemies",
+    "menu.enemiesDesc1": "1 enemy: 1v1 duel — focus economy, one push decides",
+    "menu.enemiesDesc2": "2 enemies: three-way standoff — watch two fronts",
+    "menu.enemiesDesc3": "3 enemies: four-corner brawl — classic 4-player map",
+    "menu.raceLabel": "Race (the faction you command)",
+    "menu.mapInfo": "Map: Lost Temple (only map, no choice needed)",
+    "menu.spawnInfo": "Spawns: you and enemies are placed in the 4 corners",
+    "menu.start": "S T A R T   G A M E",
+    "menu.footerLeft": "StarCraft style · procedural art · no official assets",
+    "menu.hotkeys": "Q/W/E race · 1/2/3 enemies · Enter to start",
+    "menu.net": "B A T T L E   N E T",
+
+    "net.title": "B A T T L E   N E T",
+    "net.back": "BACK",
+    "net.user": "Username",
+    "net.pass": "Password",
+    "net.login": "LOG IN",
+    "net.register": "REGISTER",
+    "net.loggedAs": "Logged in: {name} ({wins}W / {losses}L)",
+    "net.roomsTitle": "R O O M   L I S T",
+    "net.refresh": "REFRESH",
+    "net.createRoom": "CREATE ROOM",
+    "net.noRooms": "No rooms yet · click CREATE ROOM to start one",
+    "net.joinHint": "Click a room row to join",
+    "net.modeLabel": "Match size (both teams must be even to start)",
+    "net.teamLabel": "Your race",
+    "net.confirmCreate": "C R E A T E",
+    "net.teamA": "Team A",
+    "net.teamB": "Team B",
+    "net.roomId": "Room {id} ({n}v{n})",
+    "net.switchHint": "Click a team column to switch · host starts when full",
+    "net.start": "S T A R T   B A T T L E",
+    "net.waitHost": "Waiting for host to start...",
+    "net.leave": "LEAVE ROOM",
+    "net.hostTag": "Host",
+    "net.offlineTag": "offline",
+    "net.connFail": "Cannot reach server ({addr}) — start the server first",
+    "net.disconnected": "Disconnected",
+    "net.kicked": "Account signed in elsewhere; this window is logged out",
+    "net.winsLabel": "{w}W / {l}L",
+    "net.err100": "Session expired, please log in again",
+    "net.err101": "Bad request",
+    "net.err102": "Room not found",
+    "net.err103": "Room is full",
+    "net.err104": "Already in a room",
+    "net.err105": "Match already started",
+    "net.err106": "Team is full",
+    "net.err107": "Host only",
+    "net.err108": "Teams are not even yet",
+    "net.err109": "Not in a battle",
+    "net.err110": "Forbidden",
+
+    "race.terran": "TERRAN",
+    "race.protoss": "PROTOSS",
+    "race.zerg": "ZERG",
+    "race.terran.desc": "Terran: mech & heavy infantry · SCV build · Comsat detection · nuke",
+    "race.protoss.desc": "Protoss: shields & high tech · Probe build · Zealot/Dragoon · Psi Storm",
+    "race.zerg.desc": "Zerg: larva morph · Hatchery spawns · overwhelming numbers",
+
+    "hud.minerals": "Minerals",
+    "hud.vespene": "Vespene",
+    "hud.supply": "Supply",
+    "hud.units": "Units",
+    "hud.selected": "Selected",
+    "hud.fps": "FPS",
+    "hud.hint": "Click building → train · select worker, B to build · RMB move/attack/gather · MMB drag · A+click attack-move · ESC cancel",
+
+    "upgrade.attack": "Attack Upgrade",
+    "upgrade.armor": "Armor Upgrade",
+
+    "ui.building": " (building)",
+    "panel.trainTitle": "[{name}] click a button to train/morph/research",
+
+    "hint.siegeOn": "Tank deployed in siege mode",
+    "hint.siegeOff": "Tank packed up",
+    "hint.noEnergy": "Not enough energy (need {cost})",
+    "hint.noEnergyCurrent": "Not enough energy (need {cost}, have {cur})",
+    "hint.yamatoAim": "Yamato: left-click an enemy target (right-click to cancel)",
+    "hint.unloaded": "Unloaded {n} passenger(s)",
+    "hint.stim": "Stim: +50% attack & move speed",
+    "hint.stimNoHp": "Not enough HP to use Stim",
+    "hint.lockdownAim": "Lockdown: left-click an enemy mechanical unit (right-click to cancel)",
+    "hint.needNuke": "Requires {name} (nuke tech)",
+    "hint.nukeGuiding": "Nuke already guiding",
+    "hint.nukeReload": "Nuke reloading ({s}s left)",
+    "hint.nukeAim": "Nuke: left-click the strike point (right-click to cancel)",
+    "hint.minePlanted": "Spider mine planted",
+    "hint.stormAim": "Storm: left-click the target point (right-click to cancel)",
+    "hint.mcAim": "Mind Control: left-click an enemy unit (right-click to cancel)",
+    "hint.nukeCancelled": "Nuke cancelled",
+    "hint.yamatoCancelled": "Yamato cancelled",
+    "hint.lockdownCancelled": "Lockdown cancelled",
+    "hint.stormCancelled": "Storm cancelled",
+    "hint.stormOutOfRange": "Out of cast range (storm)",
+    "hint.mcCancelled": "Mind Control cancelled",
+    "hint.bunkerFull": "Bunker is full (4)",
+    "hint.noMinerals": "Not enough minerals: need {need} (have {have})",
+    "hint.noVespene": "Not enough vespene: need {need} (have {have})",
+    "hint.morphDone": "{name} morph complete",
+    "hint.researchDone": "{name} complete Lv{lv}",
+    "hint.lockdownNoTarget": "Cannot lock target",
+    "hint.lockdownMechanical": "Lockdown only works on mechanical units",
+    "hint.lockdownAlready": "Target already locked down",
+    "hint.lockdownOutOfRange": "Target out of lockdown range",
+    "hint.lockdownDone": "Locked down {name}",
+    "hint.nukeCountdown": "Nuke guiding (impact in {s}s)",
+    "hint.nukeInterrupted": "Nuke guidance interrupted",
+    "hint.nukeGhostDead": "Guiding ghost died, nuke cancelled",
+    "hint.nukeHit": "Nuke impact",
+    "hint.mcNoBuilding": "Cannot control buildings",
+    "hint.mcOutOfRange": "Target out of cast range",
+    "hint.mcDone": "Mind-controlled {name}",
+    "hint.groupEmpty": "Group {n}: no units in the current selection",
+    "hint.groupSaved": "Group {n} saved ({count} units)",
+    "hint.buildOob": "Cannot build: out of map bounds",
+    "hint.buildTerrain": "Cannot build: terrain not allowed (flat/high ground/bridge only)",
+    "hint.buildSlope": "Cannot build: footprint spans too much height",
+    "hint.buildBlocked": "Cannot build: blocked by unit or building",
+    "hint.buildNeedGeyser": "Refinery must be placed on a Vespene Geyser",
+    "hint.buildGeyserTaken": "Cannot build: this geyser is occupied",
+    "hint.buildNeedHost": "Cannot build: must be adjacent to its host building",
+    "hint.buildAttachTaken": "Cannot build: host already has this attachment",
+
+    "err.invalidBuilding": "Invalid building",
+    "err.notConstructedTrain": "Building is not complete",
+    "err.morphingTrain": "Morphing in progress",
+    "err.queueFull": "Training queue is full ({n})",
+    "err.hangarFull": "Hangar is full ({n})",
+    "err.requires": "Requires {name}",
+    "err.noSupply": "Not enough supply: need {need} ({used}/{provided})",
+    "err.noLarva": "No larva: wait for the Hatchery to spawn one",
+    "err.notConstructedMorph": "Building is not complete",
+    "err.invalidMorph": "Invalid morph target",
+    "err.morphInProgress": "Morph already in progress",
+    "err.queueNotEmpty": "Training queue must be empty to morph",
+    "err.researching": "Research already in progress",
+    "err.maxLevel": "{name} is max level (Lv{lv})",
+
+    "banner.victory": "V I C T O R Y",
+    "banner.defeat": "D E F E A T",
+    "banner.victoryHint": "All enemy forces have been destroyed",
+    "banner.defeatHint": "Your forces have been wiped out",
+  },
+};
+
+/** 取界面文案（缺失键回落英文，再回落 key 本身）；{name} 形式占位符按 params 插值 */
+export function t(key: string, params?: Record<string, string | number>): string {
+  const s = UI[LANG][key] ?? UI.en[key] ?? key;
+  if (!params) return s;
+  return s.replace(/\{(\w+)\}/g, (m, k: string) =>
+    Object.prototype.hasOwnProperty.call(params, k) ? String(params[k]) : m
+  );
+}
+
+/** 实体名称（zh-CN 直接用 config 数据；其余语言查 i18nDefs 表，缺项回落原名） */
+export function defName(def: { id: string; name: string } | undefined | null): string {
+  if (!def) return "";
+  if (LANG === "zh-CN") return def.name;
+  return DEF_TEXT[def.id]?.[LANG === "en" ? "en" : "tw"]?.[0] ?? def.name;
+}
+
+/** 实体描述（同上；当前界面未展示，保留给提示/详情面板使用） */
+export function defDesc(def: { id: string; desc: string } | undefined | null): string {
+  if (!def) return "";
+  if (LANG === "zh-CN") return def.desc;
+  return DEF_TEXT[def.id]?.[LANG === "en" ? "en" : "tw"]?.[1] ?? def.desc;
+}
+
+/** 科技升级名称（config.UPGRADE_KINDS 的 id → 当前语言文案；未知 id 原样返回） */
+export function upgradeName(kindId: string): string {
+  const k = `upgrade.${kindId}`;
+  const s = UI[LANG][k] ?? UI.en[k];
+  return s ?? kindId;
+}

@@ -1,5 +1,5 @@
 import type { TerrainType } from "../terrain";
-import type { Owner } from "../config";
+import type { Owner, Race } from "../config";
 import { isPlayable } from "../iso";
 
 /**
@@ -100,24 +100,13 @@ export const START_LOCATIONS: StartLocation[] = [
   { corner: "右上", gx: 50, gy: 22, mx: 48, my: 24, vx: 48, vy: 26 },
 ];
 
+/** 阵营开局模板（角落在 buildBases 随机分配时补上） */
+type BaseTemplate = Omit<BaseSpawn, "corner">;
+
 /** 各阵营开局模板（主建筑 + 缩进随从单位；种族决定 AI 经济路径）。
- * 玩家恒人族（本项目 HUD/面板以人族为主体）；AI 三族齐备：
+ * 玩家种族由主菜单选择（默认人族）；AI 三族齐备：
  * ai1 虫族 / ai2 神族 / ai3 人族——分配到哪个角落由 buildBases 随机决定。 */
-const FACTION_STARTS: Record<string, BaseSpawn> = {
-  player: {
-    gx: 0,
-    gy: 0,
-    owner: "player",
-    defId: "cc",
-    units: [
-      { defId: "scv", dx: -1, dy: 1 },
-      { defId: "scv", dx: 1, dy: 1 },
-      { defId: "scv", dx: 2, dy: 0 },
-      // 机枪兵放主建筑占地外（cc 占地 2×2，|dx|>=2 才在格内之外），避免开局站上建筑
-      { defId: "marine", dx: -2, dy: 1 },
-      { defId: "marine", dx: 2, dy: 1 },
-    ],
-  },
+const FACTION_STARTS: Record<string, BaseTemplate> = {
   ai1: {
     gx: 0,
     gy: 0,
@@ -161,6 +150,52 @@ const FACTION_STARTS: Record<string, BaseSpawn> = {
   },
 };
 
+/** 玩家开局模板（主菜单选种族）：三族均为 主基地 + 3 农民 + 2 基础战斗单位。
+ * 随从坐标与 FACTION_STARTS 一致：主建筑占地 2×2，|dx|>=2 才在格内之外。 */
+/** 各族玩家出生模板（主基地 + 农民 + 初始兵）；网络局按 start_game 槽位种族取用 */
+export const PLAYER_STARTS: Record<Race, BaseTemplate> = {
+  terran: {
+    gx: 0,
+    gy: 0,
+    owner: "player",
+    defId: "cc",
+    units: [
+      { defId: "scv", dx: -1, dy: 1 },
+      { defId: "scv", dx: 1, dy: 1 },
+      { defId: "scv", dx: 2, dy: 0 },
+      { defId: "marine", dx: -2, dy: 1 },
+      { defId: "marine", dx: 2, dy: 1 },
+    ],
+  },
+  protoss: {
+    gx: 0,
+    gy: 0,
+    owner: "player",
+    defId: "nexus",
+    units: [
+      { defId: "probe", dx: -1, dy: 1 },
+      { defId: "probe", dx: 1, dy: 1 },
+      { defId: "probe", dx: 0, dy: 2 },
+      { defId: "zealot", dx: -2, dy: 1 },
+      { defId: "zealot", dx: 2, dy: 1 },
+    ],
+  },
+  zerg: {
+    gx: 0,
+    gy: 0,
+    owner: "player",
+    defId: "hatchery",
+    // 幼虫由 hatchery 的 attachLarvae 自动附着生成
+    units: [
+      { defId: "drone", dx: -1, dy: 1 },
+      { defId: "drone", dx: 1, dy: 1 },
+      { defId: "drone", dx: 0, dy: 2 },
+      { defId: "zergling", dx: -2, dy: 1 },
+      { defId: "zergling", dx: 2, dy: 1 },
+    ],
+  },
+};
+
 /** 本局出场阵营（玩家 + 前 enemyCount 个 AI）；敌人上限 3 → 最多 4 家 */
 export function factionsFor(enemyCount: number): string[] {
   const n = Math.min(3, Math.max(1, Math.trunc(enemyCount)));
@@ -168,10 +203,10 @@ export function factionsFor(enemyCount: number): string[] {
 }
 
 /**
- * 按敌人数量生成一局出生点分配：出场阵营随机洗到四个角落。
+ * 按敌人数量 + 玩家所选种族生成一局出生点分配：出场阵营随机洗到四个角落。
  * Fisher-Yates 洗牌 START_LOCATIONS 副本（每局独立随机，可重开局重分配）。
  */
-export function buildBases(enemyCount: number): BaseSpawn[] {
+export function buildBases(enemyCount: number, playerRace: Race = "terran"): BaseSpawn[] {
   const slots = [...START_LOCATIONS];
   for (let i = slots.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -179,7 +214,7 @@ export function buildBases(enemyCount: number): BaseSpawn[] {
   }
   return factionsFor(enemyCount).map((owner) => {
     const slot = slots.pop()!;
-    const tpl = FACTION_STARTS[owner];
+    const tpl = owner === "player" ? PLAYER_STARTS[playerRace] ?? PLAYER_STARTS.terran : FACTION_STARTS[owner];
     return { ...tpl, gx: slot.gx, gy: slot.gy, corner: slot.corner };
   });
 }
