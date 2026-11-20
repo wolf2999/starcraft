@@ -612,26 +612,31 @@ export class MenuScene extends Phaser.Scene {
     txt.setText(value + (this.netFocused === field ? "_" : ""));
   }
 
-  /** 注册（成功自动登录） */
+  /** 注册（成功自动登录；网络异常/混合内容拦截等 fetch 抛错也给出可见反馈） */
   private async doRegister() {
     if (this.netBusy) return;
     this.netBusy = true;
+    this.showNetMsg(t("net.busy"));
     try {
       const r = await net.register(this.netUser, this.netPass);
       if (r.code !== 0) {
         this.showNetMsg(r.msg ?? "register failed");
         return;
       }
+      this.showNetMsg(t("net.regOk"));
       await this.doLogin();
+    } catch {
+      this.showNetMsg(t("net.connFail", { addr: NET_HTTP_BASE }));
     } finally {
       this.netBusy = false;
     }
   }
 
-  /** 登录 → 建立 WS → 房间列表 */
+  /** 登录 → 建立 WS → 房间列表（fetch 抛错同样可见反馈） */
   private async doLogin() {
     if (this.netBusy) return;
     this.netBusy = true;
+    this.showNetMsg(t("net.busy"));
     try {
       const r = await net.login(this.netUser, this.netPass);
       if (r.code !== 0) {
@@ -649,6 +654,8 @@ export class MenuScene extends Phaser.Scene {
       this.netMsg = "";
       net.listRooms();
       this.rebuild();
+    } catch {
+      this.showNetMsg(t("net.connFail", { addr: NET_HTTP_BASE }));
     } finally {
       this.netBusy = false;
     }
