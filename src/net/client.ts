@@ -9,13 +9,16 @@ import type { Race } from "../config";
 
 export const NET_HTTP_PORT = 8100;
 export const NET_WS_PORT = 8101;
-/** 连接主机：优先 VITE_NET_HOST 构建变量（前端发布到 Workers 等外部托管时，页面主机名≠服务器地址，
- * 构建时用它指定战网服务器入口；本地开发不设置，由页面主机名推导，本机开发即 127.0.0.1） */
-const NET_HOST =
+/** 连接入口：优先 VITE_NET_HOST 构建变量（前端发布到 Workers 等外部托管时，页面主机名≠服务器地址）。
+ * 支持两种写法：完整 origin（如 https://xxx.trycloudflare.com，https 自动转 wss）或裸主机名；
+ * 本地开发不设置，由页面主机名推导（本机开发即 127.0.0.1）。
+ * 注意：完整 origin 模式要求服务器入口有路径分流（/api/* → 8100，其余/WS → 8101），见 Mac 侧 proxy.mjs。 */
+const rawNetHost =
   (import.meta.env?.VITE_NET_HOST as string | undefined)?.trim() ||
   (typeof location !== "undefined" ? location.hostname || "127.0.0.1" : "127.0.0.1");
-export const NET_HTTP_BASE = `http://${NET_HOST}:${NET_HTTP_PORT}`;
-export const NET_WS_URL = `ws://${NET_HOST}:${NET_WS_PORT}`;
+const isOriginForm = /^https?:\/\//i.test(rawNetHost);
+export const NET_HTTP_BASE = isOriginForm ? rawNetHost : `http://${rawNetHost}:${NET_HTTP_PORT}`;
+export const NET_WS_URL = isOriginForm ? rawNetHost.replace(/^http/i, "ws") : `ws://${rawNetHost}:${NET_WS_PORT}`;
 
 /** 房间成员（room_state.players 项） */
 export interface RoomPlayer {
