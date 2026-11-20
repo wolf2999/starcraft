@@ -9,7 +9,11 @@ import type { Race } from "../config";
 
 export const NET_HTTP_PORT = 8100;
 export const NET_WS_PORT = 8101;
-const NET_HOST = typeof location !== "undefined" ? location.hostname || "127.0.0.1" : "127.0.0.1";
+/** 连接主机：优先 VITE_NET_HOST 构建变量（前端发布到 Workers 等外部托管时，页面主机名≠服务器地址，
+ * 构建时用它指定战网服务器入口；本地开发不设置，由页面主机名推导，本机开发即 127.0.0.1） */
+const NET_HOST =
+  (import.meta.env?.VITE_NET_HOST as string | undefined)?.trim() ||
+  (typeof location !== "undefined" ? location.hostname || "127.0.0.1" : "127.0.0.1");
 export const NET_HTTP_BASE = `http://${NET_HOST}:${NET_HTTP_PORT}`;
 export const NET_WS_URL = `ws://${NET_HOST}:${NET_WS_PORT}`;
 

@@ -1,9 +1,9 @@
 # Dependencies
 node_modules
 
-# Build output
-dist
-dist-ssr
+# Build output（锚定根目录，避免误伤 vendor/*/dist）
+/dist
+/dist-ssr
 
 # Vite cache
 .vite/
@@ -38,5 +38,7 @@ coverage/
 # Server（战网服务器）
 server/node_modules
 server/dist
-server/config.json        # 含 MySQL root 密码，不入库；从 config.example.json 复制修改
+server/config.json
+# deploy.config.json 含 MySQL root 密码，不入库
+server/deploy.config.json
 !server/config.example.json

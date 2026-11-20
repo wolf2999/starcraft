@@ -1,0 +1,23 @@
+{
+  "name": "liquidphaser",
+  "version": "0.1.0",
+  "description": "pngas AS3 Liquid UI → TS + Phaser 4 渲染移植（vendor 内联版：仅构建产物，供 Cloudflare 构建机使用）",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./fl": {
+      "types": "./dist/lib/types/lib/fl.d.ts",
+      "import": "./dist/lib/fl.js"
+    },
+    "./liquid": {
+      "types": "./dist/lib/types/lib/liquid.d.ts",
+      "import": "./dist/lib/liquid.js"
+    }
+  },
+  "files": [
+    "dist/lib"
+  ],
+  "peerDependencies": {
+    "phaser": "^4.2.1"
+  }
+}

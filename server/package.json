@@ -7,7 +7,9 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
-    "build-and-start": "tsc && node dist/main.js"
+    "build-and-start": "tsc && node dist/main.js",
+    "deploy": "node deploy.mjs",
+    "ssh-check": "node test/ssh_check.mjs"
   },
   "dependencies": {
     "mysql2": "^3.11.0",
@@ -16,6 +18,7 @@
   "devDependencies": {
     "@types/node": "^20.19.43",
     "@types/ws": "^8.18.2",
+    "ssh2": "^1.17.0",
     "typescript": "^5.9.3"
   }
 }
